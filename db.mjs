@@ -25,7 +25,7 @@ export async function addPlayer(name, contact = null, note = null, source = 'man
     sql: 'INSERT INTO players (name, badge_no, contact, note, source) VALUES (?, ?, ?, ?, ?)',
     args: [name, badge, contact, note, source],
   });
-  return { id: r.lastInsertRowid, badge };
+  return { id: Number(r.lastInsertRowid), badge };
 }
 export async function listPlayers() {
   return (await client.execute('SELECT * FROM players ORDER BY badge_no')).rows;
@@ -44,7 +44,7 @@ export async function createEvent(name, ruleConfig = {}) {
     sql: 'INSERT INTO events (name, rule_config) VALUES (?, ?)',
     args: [name, JSON.stringify(ruleConfig)],
   });
-  return r.lastInsertRowid;
+  return Number(r.lastInsertRowid);
 }
 export async function getEvent(id) {
   const r = await client.execute({ sql: 'SELECT * FROM events WHERE id = ?', args: [id] });
@@ -84,7 +84,7 @@ export async function createTeam(eventId, memberIds, roundNo = null) {
     sql: 'INSERT INTO teams (event_id, round_no, member_ids) VALUES (?, ?, ?)',
     args: [eventId, roundNo, JSON.stringify(memberIds)],
   });
-  return r.lastInsertRowid;
+  return Number(r.lastInsertRowid);
 }
 export async function listTeams(eventId, roundNo = null) {
   const sql = roundNo

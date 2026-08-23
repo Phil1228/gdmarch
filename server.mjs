@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer,
   createEvent, getEvent, listEvents,
@@ -9,10 +10,9 @@ import {
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, recordMatch, standings } from './tournament.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer(async (req, res) => {
+export async function handleRequest(req, res) {
   const send = (code, obj) => {
     if (res.headersSent) return;
     res.writeHead(code, { 'Content-Type': 'application/json' });
@@ -131,7 +131,7 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     return send(500, { error: e.message });
   }
-});
+}
 
 async function serveHtml(res, filepath, ctx) {
   try {
@@ -155,4 +155,8 @@ function readBody(req) {
   });
 }
 
-server.listen(PORT, () => console.log(`gdmarch server on http://localhost:${PORT}`));
+// 本地開發時啟動 listen; Vercel 不透過這條路徑
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  const server = http.createServer(handleRequest);
+  server.listen(PORT, () => console.log(`gdmarch server on http://localhost:${PORT}`));
+}
