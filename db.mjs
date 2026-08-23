@@ -4,7 +4,8 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const url = process.env.DATABASE_URL || `file:${join(__dirname, 'db', 'guandan.db')}`;
-const client = createClient({ url });
+const authToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN || undefined;
+const client = createClient(authToken ? { url, authToken } : { url });
 export default client;
 
 // ---------- players (名單管理) ----------
