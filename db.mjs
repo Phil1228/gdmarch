@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const url = process.env.DATABASE_URL || `file:${join(__dirname, 'db', 'guandan.db')}`;
+const url = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || `file:${join(__dirname, 'db', 'guandan.db')}`;
 const authToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN || undefined;
 
 let _client = null;
