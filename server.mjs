@@ -155,9 +155,11 @@ function readBody(req) {
   });
 }
 
-// 本地開發時啟動 listen; Vercel 不透過這條路徑
-const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
-if (isMain && process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+// 本地開發時啟動 listen; Vercel 不透過這條路徑 (VERCEL env 設了就不 listen)
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
   const server = http.createServer(handleRequest);
   server.listen(PORT, () => console.log(`gdmarch server on http://localhost:${PORT}`));
 }
+
+// Vercel function 入口
+export default handleRequest;
