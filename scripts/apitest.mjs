@@ -16,7 +16,7 @@ for (const s of schema.split(';')) {
   try { await client.execute(t); } catch (e) { if (!String(e.message).includes('not an error')) throw e; }
 }
 
-const { default: handler } = await import('../api/index.js');
+const { handleRequest } = await import('../server.mjs');
 
 function makeReq(url, method = 'GET') {
   return { url, method, headers: { 'x-vercel-original-url': url },
@@ -38,7 +38,7 @@ async function call(url, method = 'GET', body = null) {
   if (body) {
     req.on = (ev, cb) => { if (ev === 'data') cb(JSON.stringify(body)); if (ev === 'end') cb(); };
   }
-  await handler(req, res);
+  await handleRequest(req, res);
   return { status: res.statusCode, body: res.body };
 }
 

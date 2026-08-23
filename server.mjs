@@ -156,7 +156,8 @@ function readBody(req) {
 }
 
 // 本地開發時啟動 listen; Vercel 不透過這條路徑
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain && process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   const server = http.createServer(handleRequest);
   server.listen(PORT, () => console.log(`gdmarch server on http://localhost:${PORT}`));
 }

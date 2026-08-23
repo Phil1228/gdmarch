@@ -1,12 +1,10 @@
-import { handleRequest } from '../server.mjs';
-
 export default async function handler(req, res) {
   try {
+    const mod = await import('../server.mjs');
+    const handleRequest = mod.handleRequest;
     const originalUrl =
       (req.headers && (req.headers['x-vercel-original-url'] || req.headers['x-now-original-url'])) || null;
-    if (typeof originalUrl === 'string' && originalUrl.startsWith('/')) {
-      req.url = originalUrl;
-    }
+    if (typeof originalUrl === 'string' && originalUrl.startsWith('/')) req.url = originalUrl;
     if (typeof req.url === 'string') {
       const u = req.url;
       const qIndex = u.indexOf('?');
@@ -16,7 +14,6 @@ export default async function handler(req, res) {
     }
     return await handleRequest(req, res);
   } catch (e) {
-    // surface real error instead of FUNCTION_INVOCATION_FAILED
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: String(e && e.message || e), stack: e && e.stack }));
