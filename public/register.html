@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>掼蛋比賽報名</title>
+<style>
+  :root{ --red:#c8102e; --gold:#d4af37; --ink:#1a1a1a; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:-apple-system,"PingFang HK","Microsoft YaHei",sans-serif;
+        background:linear-gradient(160deg,#fff 0%,#fff5f5 100%); color:var(--ink);
+        min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card{ width:100%; max-width:420px; background:#fff; border-radius:18px; overflow:hidden;
+         box-shadow:0 8px 30px rgba(200,16,46,.15); border:1px solid #ffe0e0; }
+  .hd{ background:linear-gradient(135deg,var(--red),#a00d24); color:#fff; padding:28px 24px; text-align:center; }
+  .hd .logo{ font-size:34px; font-weight:800; letter-spacing:4px; }
+  .hd .logo span{ color:var(--gold); }
+  .hd .ev{ margin-top:8px; font-size:15px; opacity:.95; }
+  .bd{ padding:24px; }
+  label{ display:block; font-size:14px; color:#555; margin:16px 0 6px; font-weight:600; }
+  .req::after{ content:" *"; color:var(--red); }
+  input,textarea{ width:100%; padding:13px 14px; font-size:16px; border:1.5px solid #eee;
+         border-radius:10px; outline:none; transition:border .2s; }
+  input:focus,textarea:focus{ border-color:var(--red); }
+  textarea{ resize:vertical; min-height:60px; }
+  button{ width:100%; margin-top:22px; padding:15px; font-size:17px; font-weight:700; color:#fff;
+          background:linear-gradient(135deg,var(--red),#a00d24); border:none; border-radius:10px;
+          cursor:pointer; transition:transform .1s; }
+  button:active{ transform:scale(.98); }
+  .msg{ margin-top:16px; text-align:center; font-size:14px; min-height:20px; }
+  .ok{ color:#1a9e4b; } .err{ color:var(--red); }
+  .badge{ margin-top:18px; text-align:center; padding:18px; background:#fff8e8;
+          border:2px dashed var(--gold); border-radius:12px; display:none; }
+  .badge .n{ font-size:40px; font-weight:800; color:var(--red); letter-spacing:3px; }
+  .badge .t{ font-size:13px; color:#888; margin-top:4px; }
+  .foot{ text-align:center; font-size:12px; color:#aaa; padding:14px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="hd">
+      <div class="logo">掼<span>蛋</span></div>
+      <div class="ev" id="evName">比賽報名</div>
+    </div>
+    <div class="bd">
+      <form id="f">
+        <label class="req">姓名</label>
+        <input id="name" placeholder="請輸入你的姓名" autocomplete="name" required>
+        <label>手機號（選填）</label>
+        <input id="contact" type="tel" placeholder="如 852 1234 5678" autocomplete="tel">
+        <label>備註（選填）</label>
+        <textarea id="note" placeholder="如有特殊需求請填寫"></textarea>
+        <button type="submit">提交報名</button>
+      </form>
+      <div class="msg" id="msg"></div>
+      <div class="badge" id="badge">
+        <div class="t">你的選手號牌</div>
+        <div class="n" id="badgeNo"></div>
+        <div class="t">請記住號牌，比賽時使用</div>
+      </div>
+    </div>
+    <div class="foot">珑客 Loong-Click · 掼蛋賽務系統</div>
+  </div>
+
+<script>
+  const evId = "__EVENT_ID__";
+  const evName = "__EVENT_NAME__";
+  if (evName) document.getElementById('evName').textContent = evName;
+  if (!evId) {
+    document.getElementById('msg').className = 'msg err';
+    document.getElementById('msg').textContent = '無效的報名連結';
+    document.getElementById('f').style.display = 'none';
+  }
+  document.getElementById('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('msg');
+    const name = document.getElementById('name').value.trim();
+    if (!name) { msg.className='msg err'; msg.textContent='請填寫姓名'; return; }
+    msg.className='msg'; msg.textContent='提交中…';
+    try {
+      const r = await fetch('/api/events/self-register', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          eventId: Number(evId),
+          name,
+          contact: document.getElementById('contact').value.trim() || null,
+          note: document.getElementById('note').value.trim() || null,
+        })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || '失敗');
+      document.getElementById('badgeNo').textContent = d.badge;
+      document.getElementById('badge').style.display = 'block';
+      msg.className='msg ok'; msg.textContent='報名成功！';
+      document.getElementById('f').reset();
+    } catch(err) {
+      msg.className='msg err'; msg.textContent='報名失敗：'+err.message;
+    }
+  });
+</script>
+</body>
+</html>

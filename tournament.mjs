@@ -1,8 +1,6 @@
-import client from './db.mjs';
+import client, { createTeam, listTeams, registeredPlayerIds, getEvent } from './db.mjs';
 
-// ---------- groups (隨機分組) ----------
-// registrations: [{player_id,...}] ; groupSize: 每組人數 (掼蛋通常 4)
-// 回傳分好的組陣列
+// ---------- 工具 ----------
 export function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -11,58 +9,97 @@ export function shuffle(arr) {
   }
   return a;
 }
+// 把 ids 切成每組 size 的陣列 (不足一組的尾巴單獨成組)
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
-export async function createGroups(eventId, roundNo, groupSize = 4) {
-  const regs = await client.execute({
-    sql: 'SELECT player_id FROM registrations WHERE event_id = ?',
-    args: [eventId],
-  });
-  const ids = regs.rows.map((r) => r.player_id);
-  const shuffled = shuffle(ids);
-  const groups = [];
-  for (let i = 0; i < shuffled.length; i += groupSize) {
-    groups.push(shuffled.slice(i, i + groupSize));
+// ---------- 分組 ----------
+// team 模式: 建賽時把參賽者配成固定 2 人隊 (round_no = NULL)
+export async function buildTeams(eventId) {
+  const ids = await registeredPlayerIds(eventId);
+  const pairs = chunk(shuffle(ids), 2);
+  const teamIds = [];
+  for (const m of pairs) teamIds.push(await createTeam(eventId, m, null));
+  return teamIds;
+}
+
+// individual 模式: 每輪重新隨機分 2 人隊 (round_no = 該輪)
+export async function buildRoundTeams(eventId, roundNo) {
+  const ids = shuffle(await registeredPlayerIds(eventId));
+  const pairs = chunk(ids, 2);
+  const teamIds = [];
+  for (const m of pairs) teamIds.push(await createTeam(eventId, m, roundNo));
+  return teamIds;
+}
+
+// 生成一輪對陣: 把本輪的隊兩兩配對 (輪空者單獨一筆 bye)
+export async function buildMatchups(eventId, roundNo, teamIds) {
+  const shuffled = shuffle(teamIds);
+  const matchups = [];
+  for (let i = 0; i < shuffled.length - 1; i += 2) {
+    matchups.push([shuffled[i], shuffled[i + 1]]);
   }
-  // persist
-  for (let gi = 0; gi < groups.length; gi++) {
+  const bye = shuffled.length % 2 === 1 ? shuffled[shuffled.length - 1] : null;
+  // 持久化到 matches 表 (winner 暫空)
+  for (const [a, b] of matchups) {
     await client.execute({
-      sql: 'INSERT INTO groups (event_id, round_no, group_no, player_ids) VALUES (?, ?, ?, ?)',
-      args: [eventId, roundNo, gi + 1, JSON.stringify(groups[gi])],
+      sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, ?)',
+      args: [eventId, roundNo, a, b],
     });
   }
-  return groups;
-}
-export async function listGroups(eventId, roundNo = null) {
-  const sql = roundNo
-    ? 'SELECT * FROM groups WHERE event_id = ? AND round_no = ? ORDER BY group_no'
-    : 'SELECT * FROM groups WHERE event_id = ? ORDER BY round_no, group_no';
-  const args = roundNo ? [eventId, roundNo] : [eventId];
-  return (await client.execute({ sql, args })).rows;
+  return { matchups, bye };
 }
 
-// ---------- matches / 積分記錄 ----------
-// points 計算邏輯待用戶規則補完 (TODO)
-export async function recordMatch(eventId, roundNo, teamA, teamB, scoreA, scoreB, pointsA = null, pointsB = null) {
-  const r = await client.execute({
-    sql: `INSERT INTO matches (event_id, round_no, team_a, team_b, score_a, score_b, points_a, points_b)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [eventId, roundNo, JSON.stringify(teamA), JSON.stringify(teamB), scoreA, scoreB, pointsA, pointsB],
+// ---------- 記分 (自動算 points) ----------
+// winner: "A" | "B" | "draw"
+// draw 只在 round_rule = time/rounds 時合法; untilA 必分勝負
+export async function recordMatch(matchId, winner, scoreA = null, scoreB = null) {
+  let pa = 0, pb = 0;
+  if (winner === 'A') { pa = 2; pb = 0; }
+  else if (winner === 'B') { pa = 0; pb = 2; }
+  else if (winner === 'draw') { pa = 1; pb = 1; }
+  else throw new Error('invalid winner');
+  await client.execute({
+    sql: `UPDATE matches SET winner = ?, score_a = ?, score_b = ?, points_a = ?, points_b = ?
+          WHERE id = ?`,
+    args: [winner, scoreA, scoreB, pa, pb, matchId],
   });
-  return r.lastInsertRowid;
+  return { points_a: pa, points_b: pb };
 }
 
-// 積分榜 (由 matches 計算每位選手累計 points)
+// ---------- 積分榜 ----------
+// team 模式: 回傳 team -> 總分; individual 模式: 回傳 player -> 總分
 export async function standings(eventId) {
+  const ev = await getEvent(eventId);
+  const mode = ev?.rule?.scoring_mode || 'individual';
   const rows = (await client.execute({
-    sql: 'SELECT team_a, team_b, points_a, points_b FROM matches WHERE event_id = ?',
+    sql: 'SELECT team_a, team_b, points_a, points_b FROM matches WHERE event_id = ? AND winner IS NOT NULL',
     args: [eventId],
   })).rows;
-  const pts = {};
+  const acc = {}; // teamId -> pts
   for (const m of rows) {
-    const a = JSON.parse(m.team_a), b = JSON.parse(m.team_b);
-    const pa = m.points_a ?? 0, pb = m.points_b ?? 0;
-    for (const pid of a) pts[pid] = (pts[pid] ?? 0) + pa;
-    for (const pid of b) pts[pid] = (pts[pid] ?? 0) + pb;
+    acc[m.team_a] = (acc[m.team_a] ?? 0) + (m.points_a ?? 0);
+    acc[m.team_b] = (acc[m.team_b] ?? 0) + (m.points_b ?? 0);
+  }
+  if (mode === 'team') {
+    // 回傳 team 資訊
+    const teams = (await client.execute({
+      sql: 'SELECT id, member_ids FROM teams WHERE event_id = ?', args: [eventId],
+    })).rows;
+    return teams.map((t) => ({ team_id: t.id, members: JSON.parse(t.member_ids), points: acc[t.id] ?? 0 }));
+  }
+  // individual: 把 team 分攤到其成員
+  const teams = (await client.execute({
+    sql: 'SELECT id, member_ids FROM teams WHERE event_id = ?', args: [eventId],
+  })).rows;
+  const pts = {};
+  for (const t of teams) {
+    const members = JSON.parse(t.member_ids);
+    const p = acc[t.id] ?? 0;
+    for (const pid of members) pts[pid] = (pts[pid] ?? 0) + p;
   }
   return pts; // {playerId: totalPoints}
 }
