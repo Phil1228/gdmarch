@@ -77,7 +77,7 @@
     <div class="card">
       <h3>建立新比賽</h3>
       <div class="row">
-        <div><label>比賽名稱</label><input id="ev-name" placeholder="如：週末友誼賽"></div>
+        <div><label>比賽名稱</label><input id="ev-name" value="週末友誼賽" placeholder="如：週末友誼賽"></div>
         <div><label>計算方式</label>
           <select id="ev-mode">
             <option value="team">按隊（固定搭檔）</option>
@@ -86,7 +86,8 @@
         </div>
       </div>
       <div class="row mt">
-        <div><label>總輪數</label><input id="ev-rounds" type="number" value="3" min="1"></div>
+        <div><label>參賽人數</label><input id="ev-count" type="number" value="8" min="1"></div>
+        <div><label>總輪數（自動計算，可改）</label><input id="ev-rounds" type="number" value="" min="1" placeholder="自動"></div>
         <div><label>每輪結算方式</label>
           <select id="ev-rule">
             <option value="rounds">局數制（打完固定局數結算）</option>
@@ -95,6 +96,7 @@
           </select>
         </div>
       </div>
+      <div class="msg muted" id="ev-calc"></div>
       <button class="mt" id="btn-create">建立比賽</button>
       <div class="msg" id="ev-msg"></div>
     </div>
@@ -163,6 +165,22 @@
 
 </div>
 
+  <!-- 報名 QR 彈窗 -->
+  <div id="qr-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#fff; border-radius:16px; max-width:380px; width:100%; padding:22px; text-align:center; position:relative;">
+      <button onclick="closeQr()" style="position:absolute; top:10px; right:14px; background:none; border:none; font-size:22px; color:#999; cursor:pointer;">×</button>
+      <h3 style="margin-bottom:6px;">掃碼報名</h3>
+      <div id="qr-evname" class="muted" style="font-size:13px; margin-bottom:12px;"></div>
+      <img id="qr-img" style="width:240px; height:240px; margin:0 auto; display:block; border:1px solid #eee; border-radius:8px;">
+      <div class="link-box" id="qr-link" style="margin-top:14px;"></div>
+      <div class="row mt" style="gap:8px;">
+        <button class="sm" onclick="copyLink()">複製連結</button>
+        <button class="sm ghost" onclick="downloadQr()">下載 QR 圖</button>
+      </div>
+      <div class="msg" id="qr-msg"></div>
+    </div>
+  </div>
+
 <script>
 const api = (path, opt) => fetch(path, opt).then(r => r.json().catch(()=>({})));
 const $ = (id) => document.getElementById(id);
@@ -200,25 +218,79 @@ async function loadEvents() {
     </div>`;
   }).join('');
 }
+// 輪數自動計算
+function calcRounds(mode, count) {
+  if (!count || count < 1) return null;
+  const units = mode === 'team' ? Math.floor(count / 2) : count; // 隊數 = 人數/2
+  if (units <= 8) return units - 1;   // 循環賽：每單位輪流捉對打一輪
+  return null;                         // >8 淘汰賽，輪數另計（先留空）
+}
+function updateCalc() {
+  const mode = $('ev-mode').value;
+  const count = Number($('ev-count').value) || 0;
+  const calc = $('ev-calc');
+  if (!count) { calc.textContent = ''; return; }
+  if (mode === 'team' && count % 2 !== 0) {
+    calc.className = 'msg err';
+    calc.textContent = '⚠ 按隊計算時人數必須為偶數（每隊 2 人）';
+    return;
+  }
+  const r = calcRounds(mode, count);
+  const units = mode === 'team' ? Math.floor(count / 2) : count;
+  calc.className = 'msg muted';
+  if (units <= 8) calc.textContent = `共 ${units} ${mode==='team'?'隊':'人'} → 建議輪數 ${r}（循環賽，每隊/人都能捉對打一輪）`;
+  else calc.textContent = `${units} ${mode==='team'?'隊':'人'} > 8 → 建議採淘汰賽，輪數請手填`;
+  if (r) $('ev-rounds').placeholder = r;
+}
+$('ev-mode').onchange = updateCalc;
+$('ev-count').oninput = updateCalc;
+updateCalc();
+
 $('btn-create').onclick = async () => {
   const name = $('ev-name').value.trim();
+  const mode = $('ev-mode').value;
+  const count = Number($('ev-count').value) || 0;
+  if (mode === 'team' && count % 2 !== 0) {
+    $('ev-msg').className='msg err'; $('ev-msg').textContent='按隊時人數必須為偶數'; return;
+  }
   if (!name) { $('ev-msg').className='msg err'; $('ev-msg').textContent='請填比賽名稱'; return; }
+  let rounds = Number($('ev-rounds').value);
+  if (!rounds) { const r = calcRounds(mode, count); rounds = r || 1; }
   const ruleConfig = {
-    scoring_mode: $('ev-mode').value,
-    rounds: Number($('ev-rounds').value) || 3,
+    scoring_mode: mode,
+    participant_count: count,
+    rounds,
     round_rule: $('ev-rule').value,
     settlement: 'points',
   };
   const d = await api('/api/events', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, ruleConfig }) });
   if (d.id) {
     $('ev-msg').className='msg ok'; $('ev-msg').textContent = `已建立（ID ${d.id}）`;
-    $('ev-name').value=''; loadEvents();
+    $('ev-name').value='週末友誼賽'; loadEvents();
   } else { $('ev-msg').className='msg err'; $('ev-msg').textContent = '失敗：' + (d.error||''); }
 };
-function genLink(id) {
-  const url = `${location.origin}/r/${id}`;
-  navigator.clipboard?.writeText(url);
-  alert('報名連結已複製：\n' + url + '\n\n（可生成 QR 碼分發，選手掃碼填表即報名）');
+async function genLink(id) {
+  const ev = await api('/api/events/' + id + '/detail');
+  const name = ev?.name || ('比賽 ' + id);
+  const d = await api('/api/events/' + id + '/qrcode');
+  $('qr-evname').textContent = name;
+  $('qr-img').src = d.qrcode;
+  $('qr-link').textContent = d.link;
+  $('qr-msg').textContent = '';
+  $('qr-modal').style.display = 'flex';
+}
+function closeQr() { $('qr-modal').style.display = 'none'; }
+async function copyLink() {
+  const link = $('qr-link').textContent;
+  try { await navigator.clipboard.writeText(link); $('qr-msg').className='msg ok'; $('qr-msg').textContent='連結已複製'; }
+  catch { $('qr-msg').className='msg err'; $('qr-msg').textContent='複製失敗，請手動選取'; }
+}
+function downloadQr() {
+  const a = document.createElement('a');
+  a.href = $('qr-img').src;
+  a.download = '報名QR.png';
+  a.click();
+  $('qr-msg').className='msg ok'; $('qr-msg').textContent='QR 圖已下載';
 }
 
 // ---- 名單 ----

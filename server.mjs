@@ -1,4 +1,5 @@
 import http from 'node:http';
+import QRCode from 'qrcode';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -64,6 +65,13 @@ export async function handleRequest(req, res) {
     if (p.startsWith('/api/events/') && p.endsWith('/detail') && req.method === 'GET') {
       const id = Number(p.split('/')[3]);
       return send(200, await getEvent(id));
+    }
+    // 報名 QR 碼 (回傳 PNG dataURL)
+    if (p.startsWith('/api/events/') && p.endsWith('/qrcode') && req.method === 'GET') {
+      const id = Number(p.split('/')[3]);
+      const link = `${url.origin}/r/${id}`;
+      const dataUrl = await QRCode.toDataURL(link, { margin: 2, width: 360 });
+      return send(200, { link, qrcode: dataUrl });
     }
 
     // ---------- 報名 ----------
