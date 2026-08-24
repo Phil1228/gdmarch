@@ -50,6 +50,12 @@ export async function deletePlayer(id) {
 
 // ---------- events ----------
 export async function createEvent(name, ruleConfig = {}) {
+  // 業務校驗: 按隊計算時人數必須為偶數 (每隊 2 人)
+  if (ruleConfig?.scoring_mode === 'team' && ruleConfig?.participant_count != null) {
+    if (ruleConfig.participant_count % 2 !== 0) {
+      throw new Error('按隊計算時人數必須為偶數');
+    }
+  }
   const r = await client.execute({
     sql: 'INSERT INTO events (name, rule_config) VALUES (?, ?)',
     args: [name, JSON.stringify(ruleConfig)],
