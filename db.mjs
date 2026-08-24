@@ -96,10 +96,34 @@ export async function createTeam(eventId, memberIds, roundNo = null) {
   });
   return Number(r.lastInsertRowid);
 }
+export async function listMatches(eventId, roundNo = null) {
+  const sql = roundNo
+    ? 'SELECT * FROM matches WHERE event_id = ? AND round_no = ? ORDER BY id'
+    : 'SELECT * FROM matches WHERE event_id = ? ORDER BY round_no, id';
+  const args = roundNo ? [eventId, roundNo] : [eventId];
+  return (await client.execute({ sql, args })).rows;
+}
 export async function listTeams(eventId, roundNo = null) {
   const sql = roundNo
     ? 'SELECT * FROM teams WHERE event_id = ? AND round_no = ?'
     : 'SELECT * FROM teams WHERE event_id = ?';
   const args = roundNo ? [eventId, roundNo] : [eventId];
-  return (await client.execute({ sql, args })).rows;
+  const teams = (await client.execute({ sql, args })).rows;
+  const players = (await client.execute('SELECT id, name, badge_no FROM players')).rows;
+  const pmap = {};
+  for (const p of players) pmap[p.id] = p;
+  return teams.map((t) => ({
+    ...t,
+    members: JSON.parse(t.member_ids).map((mid) => ({
+      id: mid,
+      name: pmap[mid]?.name || '?',
+      badge: pmap[mid]?.badge_no || '',
+    })),
+  }));
+}
+export async function playersMap() {
+  const rows = (await client.execute('SELECT id, name, badge_no FROM players')).rows;
+  const m = {};
+  for (const r of rows) m[r.id] = r;
+  return m;
 }

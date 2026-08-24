@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>掼蛋賽務後台</title>
+<style>
+  :root{ --red:#c8102e; --gold:#d4af37; --ink:#1a1a1a; --line:#eee; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:-apple-system,"PingFang HK","Microsoft YaHei",sans-serif; background:#f5f6f8; color:var(--ink); }
+  .top{ background:linear-gradient(135deg,var(--red),#a00d24); color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; }
+  .top .logo{ font-weight:800; letter-spacing:2px; font-size:18px; }
+  .top .logo span{ color:var(--gold); }
+  .top a.home{ color:#fff; opacity:.85; font-size:13px; text-decoration:none; }
+  .wrap{ max-width:860px; margin:0 auto; padding:16px; }
+  .tabs{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .tab{ padding:9px 16px; background:#fff; border:1px solid var(--line); border-radius:10px; cursor:pointer; font-size:14px; font-weight:600; color:#666; }
+  .tab.active{ background:var(--red); color:#fff; border-color:var(--red); }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:14px; }
+  .card h3{ font-size:16px; margin-bottom:12px; }
+  label{ display:block; font-size:13px; color:#666; margin:10px 0 5px; font-weight:600; }
+  input,select,textarea{ width:100%; padding:11px 12px; font-size:15px; border:1.5px solid #e6e6e6; border-radius:9px; outline:none; }
+  input:focus,select:focus,textarea:focus{ border-color:var(--red); }
+  button{ padding:11px 18px; font-size:15px; font-weight:700; color:#fff; background:linear-gradient(135deg,var(--red),#a00d24); border:none; border-radius:9px; cursor:pointer; }
+  button.ghost{ background:#fff; color:var(--red); border:1.5px solid var(--red); }
+  button.sm{ padding:7px 12px; font-size:13px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .row > div{ flex:1; min-width:140px; }
+  table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  th,td{ padding:9px 10px; text-align:left; border-bottom:1px solid var(--line); }
+  th{ color:#888; font-weight:600; font-size:12px; }
+  .msg{ margin-top:10px; font-size:13px; min-height:16px; }
+  .ok{ color:#1a9e4b; } .err{ color:var(--red); } .muted{ color:#999; }
+  .ev-row{ display:flex; justify-content:space-between; align-items:center; padding:12px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; }
+  .ev-row .name{ font-weight:700; }
+  .ev-row .meta{ font-size:12px; color:#888; margin-top:3px; }
+  .badge-box{ background:#fff8e8; border:2px dashed var(--gold); border-radius:12px; padding:14px; text-align:center; margin-top:10px; }
+  .badge-box .n{ font-size:30px; font-weight:800; color:var(--red); letter-spacing:2px; }
+  .link-box{ background:#f0f7ff; border:1px solid #cfe3ff; border-radius:9px; padding:10px; font-size:13px; word-break:break-all; margin-top:8px; }
+  .tag{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+  .tag.team{ background:#fde8ec; color:var(--red); }
+  .tag.individual{ background:#e8f0fd; color:#2a6bd4; }
+  .mt{ margin-top:14px; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media(max-width:560px){ .grid2{ grid-template-columns:1fr; } .top .logo{ font-size:15px; } }
+  .match{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .match .vs{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .match .team{ flex:1; text-align:center; font-weight:700; }
+  .match .vs .x{ color:#bbb; }
+  .match .acts{ display:flex; gap:6px; margin-top:10px; }
+  .match .acts button{ flex:1; }
+  .rank{ display:flex; align-items:center; gap:12px; padding:10px; border-bottom:1px solid var(--line); }
+  .rank .pos{ font-size:18px; font-weight:800; width:34px; color:var(--red); }
+  .rank .nm{ font-weight:600; }
+  .rank .pt{ margin-left:auto; font-weight:800; color:var(--gold); }
+  .bye{ color:#b8821a; font-size:13px; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">掼<span>蛋</span> 賽務後台</div>
+  <a class="home" href="/">← 返回首頁</a>
+</div>
+<div class="wrap">
+
+  <!-- 賽事管理 -->
+  <div class="tabs">
+    <div class="tab active" data-tab="events">賽事管理</div>
+    <div class="tab" data-tab="roster">名單</div>
+    <div class="tab" data-tab="scoring">分組記分</div>
+    <div class="tab" data-tab="standings">積分榜</div>
+  </div>
+
+  <div class="panel active" id="tab-events">
+    <div class="card">
+      <h3>建立新比賽</h3>
+      <div class="row">
+        <div><label>比賽名稱</label><input id="ev-name" placeholder="如：週末友誼賽"></div>
+        <div><label>計算方式</label>
+          <select id="ev-mode">
+            <option value="team">按隊（固定搭檔）</option>
+            <option value="individual">按個人（每輪重洗）</option>
+          </select>
+        </div>
+      </div>
+      <div class="row mt">
+        <div><label>總輪數</label><input id="ev-rounds" type="number" value="3" min="1"></div>
+        <div><label>每輪結算方式</label>
+          <select id="ev-rule">
+            <option value="rounds">局數制（打完固定局數結算）</option>
+            <option value="time">計時制（時間到結算，可平手）</option>
+            <option value="untilA">打過A為止（必分勝負）</option>
+          </select>
+        </div>
+      </div>
+      <button class="mt" id="btn-create">建立比賽</button>
+      <div class="msg" id="ev-msg"></div>
+    </div>
+    <div class="card">
+      <h3>比賽列表</h3>
+      <div id="ev-list"><span class="muted">載入中…</span></div>
+    </div>
+  </div>
+
+  <!-- 名單 -->
+  <div class="panel" id="tab-roster">
+    <div class="card">
+      <h3>選手名單（全體）</h3>
+      <div class="row">
+        <div><label>姓名（必填）</label><input id="p-name" placeholder="姓名"></div>
+        <div><label>手機（選）</label><input id="p-contact" placeholder="手機"></div>
+        <div><label>備註（選）</label><input id="p-note" placeholder="備註"></div>
+        <div style="flex:0"><button id="btn-add-p">新增選手</button></div>
+      </div>
+      <div class="msg" id="p-msg"></div>
+    </div>
+    <div class="card">
+      <h3>批量導入（CSV / 每行：姓名,手機,備註）</h3>
+      <textarea id="csv" rows="5" placeholder="小明,8521111,&#10;小華,8522222,&#10;小美,,"></textarea>
+      <button class="mt" id="btn-import">匯入</button>
+      <div class="msg" id="csv-msg"></div>
+    </div>
+    <div class="card">
+      <h3>名單</h3>
+      <table>
+        <thead><tr><th>號牌</th><th>姓名</th><th>手機</th><th>備註</th><th>來源</th><th></th></tr></thead>
+        <tbody id="p-list"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 分組記分 -->
+  <div class="panel" id="tab-scoring">
+    <div class="card">
+      <h3>選擇比賽</h3>
+      <select id="sc-ev"></select>
+      <div class="row mt">
+        <div><label>輪次</label><input id="sc-round" type="number" value="1" min="1"></div>
+        <div style="flex:0"><button id="btn-build">生成本輪對陣</button></div>
+      </div>
+      <div class="msg" id="sc-msg"></div>
+    </div>
+    <div class="card">
+      <h3>本輪對陣</h3>
+      <div id="sc-matches"><span class="muted">尚未生成</span></div>
+    </div>
+  </div>
+
+  <!-- 積分榜 -->
+  <div class="panel" id="tab-standings">
+    <div class="card">
+      <h3>選擇比賽</h3>
+      <select id="st-ev"></select>
+      <button class="mt sm" id="btn-st">查看積分榜</button>
+    </div>
+    <div class="card">
+      <h3>排名</h3>
+      <div id="st-list"><span class="muted">尚未查看</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const api = (path, opt) => fetch(path, opt).then(r => r.json().catch(()=>({})));
+const $ = (id) => document.getElementById(id);
+
+// tab 切換
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  $('tab-' + t.dataset.tab).classList.add('active');
+  if (t.dataset.tab === 'events') loadEvents();
+  if (t.dataset.tab === 'roster') loadPlayers();
+  if (t.dataset.tab === 'scoring') loadScoringEvents();
+  if (t.dataset.tab === 'standings') loadStandingsEvents();
+});
+
+const evTag = (mode) => mode === 'team'
+  ? '<span class="tag team">按隊</span>'
+  : '<span class="tag individual">按個人</span>';
+const ruleText = (r) => ({ time:'計時制', rounds:'局數制', untilA:'打過A為止' }[r] || '');
+
+// ---- 賽事 ----
+async function loadEvents() {
+  const evs = await api('/api/events');
+  const box = $('ev-list');
+  if (!Array.isArray(evs) || !evs.length) { box.innerHTML = '<span class="muted">尚無比賽</span>'; return; }
+  box.innerHTML = evs.map(ev => {
+    const c = (ev.rule_config ? JSON.parse(ev.rule_config) : {});
+    return `<div class="ev-row">
+      <div><div class="name">${ev.name}</div>
+        <div class="meta">${evTag(c.scoring_mode)} ${ruleText(c.round_rule)} · 共${c.rounds||'?'}輪 · ID ${ev.id}</div></div>
+      <div style="display:flex;gap:8px">
+        <button class="sm ghost" onclick="genLink(${ev.id})">報名連結</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+$('btn-create').onclick = async () => {
+  const name = $('ev-name').value.trim();
+  if (!name) { $('ev-msg').className='msg err'; $('ev-msg').textContent='請填比賽名稱'; return; }
+  const ruleConfig = {
+    scoring_mode: $('ev-mode').value,
+    rounds: Number($('ev-rounds').value) || 3,
+    round_rule: $('ev-rule').value,
+    settlement: 'points',
+  };
+  const d = await api('/api/events', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, ruleConfig }) });
+  if (d.id) {
+    $('ev-msg').className='msg ok'; $('ev-msg').textContent = `已建立（ID ${d.id}）`;
+    $('ev-name').value=''; loadEvents();
+  } else { $('ev-msg').className='msg err'; $('ev-msg').textContent = '失敗：' + (d.error||''); }
+};
+function genLink(id) {
+  const url = `${location.origin}/r/${id}`;
+  navigator.clipboard?.writeText(url);
+  alert('報名連結已複製：\n' + url + '\n\n（可生成 QR 碼分發，選手掃碼填表即報名）');
+}
+
+// ---- 名單 ----
+async function loadPlayers() {
+  const ps = await api('/api/players');
+  const tb = $('p-list');
+  if (!Array.isArray(ps) || !ps.length) { tb.innerHTML = '<tr><td colspan="6" class="muted">尚無選手</td></tr>'; return; }
+  tb.innerHTML = ps.map(p => `<tr>
+    <td>${p.badge_no||''}</td><td>${p.name}</td><td>${p.contact||''}</td><td>${p.note||''}</td>
+    <td>${p.source||''}</td>
+    <td><button class="sm ghost" onclick="delPlayer(${p.id})">刪</button></td>
+  </tr>`).join('');
+}
+$('btn-add-p').onclick = async () => {
+  const name = $('p-name').value.trim();
+  if (!name) { $('p-msg').className='msg err'; $('p-msg').textContent='請填姓名'; return; }
+  const d = await api('/api/players', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, contact:$('p-contact').value.trim()||null, note:$('p-note').value.trim()||null }) });
+  if (d.id) { $('p-msg').className='msg ok'; $('p-msg').textContent=`已新增，號牌 ${d.badge}`;
+    $('p-name').value=''; $('p-contact').value=''; $('p-note').value=''; loadPlayers(); }
+  else { $('p-msg').className='msg err'; $('p-msg').textContent='失敗：'+(d.error||''); }
+};
+$('btn-import').onclick = async () => {
+  const csv = $('csv').value.trim();
+  if (!csv) { $('csv-msg').className='msg err'; $('csv-msg').textContent='請貼上資料'; return; }
+  const d = await api('/api/import-players', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ csv }) });
+  const n = d.added?.length || 0;
+  $('csv-msg').className='msg ok'; $('csv-msg').textContent = `成功匯入 ${n} 人`;
+  $('csv').value=''; loadPlayers();
+};
+async function delPlayer(id) {
+  if (!confirm('確定刪除該選手？')) return;
+  await api('/api/players/' + id, { method:'DELETE' });
+  loadPlayers();
+}
+
+// ---- 分組記分 ----
+async function loadScoringEvents() {
+  const evs = await api('/api/events');
+  $('sc-ev').innerHTML = (evs||[]).map(e => `<option value="${e.id}">${e.name} (ID ${e.id})</option>`).join('');
+  if (evs && evs.length) loadMatches();
+}
+$('btn-build').onclick = async () => {
+  const evId = $('sc-ev').value;
+  if (!evId) return;
+  const ev = await api('/api/events/' + evId + '/detail');
+  const mode = ev?.rule?.scoring_mode || 'individual';
+  const roundNo = Number($('sc-round').value) || 1;
+  // 先確保有隊：team 模式只在第1輪建固定隊；individual 每輪建
+  if (mode === 'team') {
+    const teams = await api('/api/events/' + evId + '/teams');
+    if (!teams.length) { await api('/api/build-teams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+evId, scoringMode:mode }) }); }
+  } else {
+    await api('/api/build-teams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+evId, scoringMode:mode, roundNo }) });
+  }
+  const tl = await api('/api/events/' + evId + '/teams?round=' + roundNo);
+  const teamIds = (tl||[]).map(t => t.id);
+  if (!teamIds.length) { $('sc-msg').className='msg err'; $('sc-msg').textContent='尚無報名選手或無法分組'; return; }
+  const d = await api('/api/matchups', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+evId, roundNo, teamIds }) });
+  $('sc-msg').className='msg ok'; $('sc-msg').textContent = `已生成 ${d.matchups?.length||0} 場對陣` + (d.bye ? '（1人輪空）' : '');
+  loadMatches();
+};
+// 記住 team 名字映射
+let TEAM_MAP = {};
+async function loadMatches() {
+  const evId = $('sc-ev').value;
+  if (!evId) return;
+  const mode = (await api('/api/events/' + evId + '/detail'))?.rule?.scoring_mode || 'individual';
+  const roundNo = Number($('sc-round').value) || 1;
+  const teams = await api('/api/events/' + evId + '/teams?round=' + roundNo);
+  TEAM_MAP = {};
+  (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members.map(m => m.name).join(' + '); });
+  const ms = await api('/api/events/' + evId + '/matches?round=' + roundNo);
+  const box = $('sc-matches');
+  if (!Array.isArray(ms) || !ms.length) { box.innerHTML = '<span class="muted">本輪尚無對陣，請點「生成本輪對陣」</span>'; return; }
+  box.innerHTML = ms.map(m => {
+    const a = TEAM_MAP[m.team_a] || ('隊'+m.team_a);
+    const b = TEAM_MAP[m.team_b] || ('隊'+m.team_b);
+    const done = m.winner ? `<span class="bye">已記分：${m.winner==='draw'?'平局':(m.winner+'勝')} (${m.score_a??''}:${m.score_b??''})</span>` : '';
+    return `<div class="match" data-id="${m.id}">
+      <div class="vs"><div class="team">${a}</div><div class="x">VS</div><div class="team">${b}</div></div>
+      <div class="acts">
+        <button onclick="rec(${m.id},'A')">A勝</button>
+        <button onclick="rec(${m.id},'B')">B勝</button>
+        <button class="ghost" onclick="rec(${m.id},'draw')">平局</button>
+      </div>${done}
+    </div>`;
+  }).join('');
+}
+window.rec = async (matchId, winner) => {
+  const d = await api('/api/matches', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ matchId, winner }) });
+  if (d.points_a !== undefined) { $('sc-msg').className='msg ok'; $('sc-msg').textContent='已記分'; loadMatches(); }
+  else { $('sc-msg').className='msg err'; $('sc-msg').textContent='失敗：'+(d.error||''); }
+};
+
+// ---- 積分榜 ----
+async function loadStandingsEvents() {
+  const evs = await api('/api/events');
+  $('st-ev').innerHTML = (evs||[]).map(e => `<option value="${e.id}">${e.name} (ID ${e.id})</option>`).join('');
+}
+$('btn-st').onclick = async () => {
+  const evId = $('st-ev').value;
+  if (!evId) return;
+  const st = await api('/api/events/' + evId + '/standings');
+  const box = $('st-list');
+  if (!Array.isArray(st) || !st.length) { box.innerHTML = '<span class="muted">尚無積分</span>'; return; }
+  // 若是 team 模式，st 為 [{team_id, members, points}]；individual 為 [{player_id,name,badge,points}]
+  const isTeam = st[0] && st[0].team_id !== undefined;
+  box.innerHTML = st.map((x, i) => {
+    const nm = isTeam ? (x.members.map(m=>m.name).join(' + ')) : `${x.name} <span class="muted">(${x.badge})</span>`;
+    return `<div class="rank"><div class="pos">${i+1}</div><div class="nm">${nm}</div><div class="pt">${x.points} 分</div></div>`;
+  }).join('');
+};
+
+// 初始
+loadEvents();
+</script>
+</body>
+</html>

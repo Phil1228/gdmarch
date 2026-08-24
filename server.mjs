@@ -6,7 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer,
   createEvent, getEvent, listEvents,
-  registerPlayer, listRegistrations, registeredPlayerIds, listTeams,
+  registerPlayer, listRegistrations, registeredPlayerIds, listTeams, listMatches,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, recordMatch, standings } from './tournament.mjs';
 
@@ -22,9 +22,12 @@ export async function handleRequest(req, res) {
   const p = url.pathname;
   const j = () => readBody(req);
 
-  // ---------- 靜態頁: 首頁比賽列表 / 掃碼報名 ----------
+  // ---------- 靜態頁: 首頁比賽列表 / 後台 / 掃碼報名 ----------
   if (p === '/' || p === '/index.html') {
     return serveHtml(res, join(__dirname, 'public', 'index.html'), {});
+  }
+  if (p === '/admin' || p === '/admin.html') {
+    return serveHtml(res, join(__dirname, 'public', 'admin.html'), {});
   }
   if (p.startsWith('/r/')) {
     const eventId = p.split('/')[2];
@@ -114,6 +117,11 @@ export async function handleRequest(req, res) {
       const eventId = Number(p.split('/')[3]);
       const roundNo = url.searchParams.get('round') ? Number(url.searchParams.get('round')) : null;
       return send(200, await listTeams(eventId, roundNo));
+    }
+    if (p.startsWith('/api/events/') && p.endsWith('/matches') && req.method === 'GET') {
+      const eventId = Number(p.split('/')[3]);
+      const roundNo = url.searchParams.get('round') ? Number(url.searchParams.get('round')) : null;
+      return send(200, await listMatches(eventId, roundNo));
     }
 
     // ---------- 記分 ----------

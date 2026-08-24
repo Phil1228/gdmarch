@@ -78,8 +78,8 @@ await buildMatchups(eid2, 1, rt1);
 const mId2 = (await client.execute('SELECT id FROM matches WHERE event_id=? AND round_no=1', [eid2])).rows[0].id;
 await recordMatch(mId2, 'draw', 10, 10);
 const st2 = await standings(eid2);
-const vals = Object.values(st2);
-assert(vals.length === 4 && vals.every((v) => v === 1), '平局各+1 攤到個人');
+assert(st2.length === 4, '4人攤到個人積分');
+assert(st2.every((x) => x.points === 1), '平局各+1 攤到個人');
 
 log('\n✅ ALL SMOKE TESTS PASSED');
 try { unlinkSync(TEST_DB); } catch {}

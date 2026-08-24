@@ -1,4 +1,4 @@
-import client, { createTeam, listTeams, registeredPlayerIds, getEvent } from './db.mjs';
+import client, { createTeam, listTeams, registeredPlayerIds, getEvent, playersMap } from './db.mjs';
 
 // ---------- 工具 ----------
 export function shuffle(arr) {
@@ -43,14 +43,16 @@ export async function buildMatchups(eventId, roundNo, teamIds) {
     matchups.push([shuffled[i], shuffled[i + 1]]);
   }
   const bye = shuffled.length % 2 === 1 ? shuffled[shuffled.length - 1] : null;
-  // 持久化到 matches 表 (winner 暫空)
+  // 持久化到 matches 表 (winner 暫空), 並帶回 match id
+  const persisted = [];
   for (const [a, b] of matchups) {
-    await client.execute({
+    const r = await client.execute({
       sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, ?)',
       args: [eventId, roundNo, a, b],
     });
+    persisted.push({ matchId: Number(r.lastInsertRowid), teamA: a, teamB: b });
   }
-  return { matchups, bye };
+  return { matchups: persisted, bye };
 }
 
 // ---------- 記分 (自動算 points) ----------
@@ -91,15 +93,23 @@ export async function standings(eventId) {
     })).rows;
     return teams.map((t) => ({ team_id: t.id, members: JSON.parse(t.member_ids), points: acc[t.id] ?? 0 }));
   }
-  // individual: 把 team 分攤到其成員
+  // individual: 把 team 分攤到其成員, 回傳帶名字的陣列
   const teams = (await client.execute({
     sql: 'SELECT id, member_ids FROM teams WHERE event_id = ?', args: [eventId],
   })).rows;
+  const pmap = await playersMap();
   const pts = {};
   for (const t of teams) {
     const members = JSON.parse(t.member_ids);
     const p = acc[t.id] ?? 0;
     for (const pid of members) pts[pid] = (pts[pid] ?? 0) + p;
   }
-  return pts; // {playerId: totalPoints}
+  return Object.entries(pts)
+    .map(([pid, points]) => ({
+      player_id: Number(pid),
+      name: pmap[pid]?.name || '?',
+      badge: pmap[pid]?.badge_no || '',
+      points,
+    }))
+    .sort((a, b) => b.points - a.points);
 }
