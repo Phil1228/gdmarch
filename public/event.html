@@ -104,10 +104,10 @@
   <!-- 分組記分 -->
   <div class="panel" id="tab-scoring">
     <div class="card">
-      <h3>本輪對陣</h3>
+      <h3>對陣表（所有輪次）</h3>
       <div class="row">
-        <div><label>輪次</label><input id="sc-round" type="number" value="1" min="1"></div>
-        <div style="flex:0"><button id="btn-build">生成對陣</button></div>
+        <div><label>檢視輪次</label><input id="sc-round" type="number" value="1" min="1"></div>
+        <div style="flex:0"><button id="btn-build">生成所有輪次對陣</button></div>
         <div style="flex:0"><button class="sm ghost" id="btn-refresh">重整</button></div>
       </div>
       <div class="msg" id="sc-msg"></div>
@@ -234,23 +234,22 @@ async function loadMatches() {
 $('btn-build').onclick = async () => {
   const ev = await api('/api/events/' + EID + '/detail');
   const mode = ev?.rule?.scoring_mode || 'individual';
-  const roundNo = Number($('sc-round').value) || 1;
-  if (mode === 'team') {
-    const teams = await api('/api/events/' + EID + '/teams');
-    if (!teams.length) { await api('/api/build-teams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+EID, scoringMode:mode }) }); }
-  } else {
-    await api('/api/build-teams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+EID, scoringMode:mode, roundNo }) });
+  const rounds = ev?.rule?.rounds || 1;
+  try {
+    const d = await api('/api/events/' + EID + '/build-all', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    const n = d.matchups?.length || 0;
+    $('sc-msg').className='msg ok'; $('sc-msg').textContent = `已生成 ${rounds} 輪對陣，共 ${n} 場（含輪空）`;
+  } catch (e) {
+    $('sc-msg').className='msg err'; $('sc-msg').textContent = '失敗：' + (e.message || '');
+    return;
   }
-  // team 模式固定隊 round_no=NULL, 不帶 round; individual 帶 round
-  const tlUrl = mode === 'team' ? ('/api/events/' + EID + '/teams') : ('/api/events/' + EID + '/teams?round=' + roundNo);
-  const tl = await api(tlUrl);
-  const teamIds = (tl||[]).map(t => t.id);
-  if (!teamIds.length) { $('sc-msg').className='msg err'; $('sc-msg').textContent='尚無報名選手或無法分組'; return; }
-  const d = await api('/api/matchups', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+EID, roundNo, teamIds }) });
-  $('sc-msg').className='msg ok'; $('sc-msg').textContent = `已生成 ${d.matchups?.length||0} 場對陣` + (d.bye ? '（1人輪空）' : '');
+  $('sc-round').max = rounds;
+  // 跳到最後一輪顯示
+  $('sc-round').value = rounds;
   loadMatches();
 };
 $('btn-refresh').onclick = loadMatches;
+$('sc-round').onchange = loadMatches;
 window.rec = async (matchId, winner) => {
   const d = await api('/api/matches', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ matchId, winner }) });
   if (d.points_a !== undefined) { $('sc-msg').className='msg ok'; $('sc-msg').textContent='已記分'; loadMatches(); }

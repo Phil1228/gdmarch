@@ -16,25 +16,89 @@ function chunk(arr, size) {
   return out;
 }
 
+// 循環賽輪轉對陣 (circle method): round 從 1 開始, 每輪輪轉使每隊都對到不同隊
+function roundRobinPairings(ids, round) {
+  let arr = [...ids];
+  const hasBye = arr.length % 2 === 1;
+  if (hasBye) arr.push(null); // null = 該輪輪空
+  const k = arr.length;
+  const half = k / 2;
+  const fixed = arr[0];
+  const rest = arr.slice(1);
+  const rot = (round - 1) % (k - 1 || 1);
+  for (let i = 0; i < rot; i++) rest.push(rest.shift());
+  const circle = [fixed, ...rest];
+  const pairs = [];
+  let bye = null;
+  for (let i = 0; i < half; i++) {
+    const a = circle[i];
+    const b = circle[k - 1 - i];
+    if (a === null) bye = b;
+    else if (b === null) bye = a;
+    else pairs.push([a, b]);
+  }
+  return { pairs, bye };
+}
+
 // ---------- 分組 ----------
-// team 模式: 建賽時把參賽者配成固定 2 人隊 (round_no = NULL)
+// team 模式: 固定 2 人隊 (round_no = NULL), 之後所有輪次用輪轉法產生對陣
 export async function buildTeams(eventId) {
   const ids = await registeredPlayerIds(eventId);
   if (!ids.length) throw new Error('本場尚無報名選手，請先在名單加入');
-  const pairs = chunk(shuffle(ids), 2);
   const teamIds = [];
-  for (const m of pairs) teamIds.push(await createTeam(eventId, m, null));
+  for (const m of chunk(shuffle(ids), 2)) teamIds.push(await createTeam(eventId, m, null));
   return teamIds;
 }
 
-// individual 模式: 每輪重新隨機分 2 人隊 (round_no = 該輪)
+// individual 模式: 每輪重隨機 2 人隊 (round_no = 該輪)
 export async function buildRoundTeams(eventId, roundNo) {
   const ids = shuffle(await registeredPlayerIds(eventId));
   if (!ids.length) throw new Error('本場尚無報名選手，請先在名單加入');
-  const pairs = chunk(ids, 2);
   const teamIds = [];
-  for (const m of pairs) teamIds.push(await createTeam(eventId, m, roundNo));
+  for (const m of chunk(ids, 2)) teamIds.push(await createTeam(eventId, m, roundNo));
   return teamIds;
+}
+
+// 一鍵生成所有輪次對陣
+// team 模式: 固定隊 + 輪轉法 (每輪不同對陣, 每隊都捉對打過)
+// individual 模式: 每輪重洗隊 + 隨機配對
+export async function buildAllRounds(eventId) {
+  const ev = await getEvent(eventId);
+  const mode = ev?.rule?.scoring_mode || 'individual';
+  const rounds = ev?.rule?.rounds || 1;
+  if (mode === 'team') {
+    let teamIds = (await listTeams(eventId)).map((t) => t.id);
+    if (!teamIds.length) teamIds = await buildTeams(eventId);
+    if (teamIds.length < 2) throw new Error('隊伍不足 2 隊，無法對陣');
+    const out = [];
+    for (let r = 1; r <= rounds; r++) {
+      const { pairs, bye } = roundRobinPairings(teamIds, r);
+      for (const [a, b] of pairs) {
+        const r2 = await client.execute({
+          sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, ?)',
+          args: [eventId, r, a, b],
+        });
+        out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: a, teamB: b });
+      }
+      if (bye != null) out.push({ round: r, bye: bye });
+    }
+    return { mode, rounds, matchups: out };
+  }
+  // individual
+  const out = [];
+  for (let r = 1; r <= rounds; r++) {
+    const teamIds = await buildRoundTeams(eventId, r);
+    const sh = shuffle(teamIds);
+    for (let i = 0; i < sh.length - 1; i += 2) {
+      const r2 = await client.execute({
+        sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, ?)',
+        args: [eventId, r, sh[i], sh[i + 1]],
+      });
+      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: sh[i], teamB: sh[i + 1] });
+    }
+    if (sh.length % 2 === 1) out.push({ round: r, bye: sh[sh.length - 1] });
+  }
+  return { mode, rounds, matchups: out };
 }
 
 // 生成一輪對陣: 把本輪的隊兩兩配對 (輪空者單獨一筆 bye)

@@ -9,7 +9,7 @@ import {
   createEvent, getEvent, listEvents,
   registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches,
 } from './db.mjs';
-import { buildTeams, buildRoundTeams, buildMatchups, recordMatch, standings } from './tournament.mjs';
+import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
 
 const PORT = process.env.PORT || 3000;
 
@@ -159,6 +159,12 @@ export async function handleRequest(req, res) {
     if (p === '/api/matchups' && req.method === 'POST') {
       const b = await j();
       const r = await buildMatchups(b.eventId, b.roundNo, b.teamIds);
+      return send(201, r);
+    }
+    // 一鍵生成所有輪次對陣
+    if (p.startsWith('/api/events/') && p.endsWith('/build-all') && req.method === 'POST') {
+      const eventId = Number(p.split('/')[3]);
+      const r = await buildAllRounds(eventId);
       return send(201, r);
     }
     if (p.startsWith('/api/events/') && p.endsWith('/teams') && req.method === 'GET') {
