@@ -66,6 +66,9 @@ export async function buildAllRounds(eventId) {
   const ev = await getEvent(eventId);
   const mode = ev?.rule?.scoring_mode || 'individual';
   const rounds = ev?.rule?.rounds || 1;
+  // 先清空舊對陣 (及 individual 模式的臨時隊), 實現「重整 = 重來」
+  await client.execute({ sql: 'DELETE FROM matches WHERE event_id = ?', args: [eventId] });
+  await client.execute({ sql: 'DELETE FROM teams WHERE event_id = ?', args: [eventId] });
   if (mode === 'team') {
     let teamIds = (await listTeams(eventId)).map((t) => t.id);
     if (!teamIds.length) teamIds = await buildTeams(eventId);

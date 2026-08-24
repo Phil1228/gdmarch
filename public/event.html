@@ -108,7 +108,7 @@
       <div class="row">
         <div><label>檢視輪次</label><input id="sc-round" type="number" value="1" min="1"></div>
         <div style="flex:0"><button id="btn-build">生成所有輪次對陣</button></div>
-        <div style="flex:0"><button class="sm ghost" id="btn-refresh">重整</button></div>
+        <div style="flex:0"><button class="sm ghost" id="btn-refresh">重置對陣</button></div>
       </div>
       <div class="msg" id="sc-msg"></div>
     </div>
@@ -248,7 +248,10 @@ $('btn-build').onclick = async () => {
   $('sc-round').value = rounds;
   loadMatches();
 };
-$('btn-refresh').onclick = loadMatches;
+$('btn-refresh').onclick = async () => {
+  if (!confirm('重整會清空所有已生成的對陣與已記分，重新隨機生成。確定？')) return;
+  $('btn-build').click();
+};
 $('sc-round').onchange = loadMatches;
 window.rec = async (matchId, winner) => {
   const d = await api('/api/matches', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ matchId, winner }) });

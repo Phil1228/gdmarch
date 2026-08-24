@@ -55,6 +55,12 @@ const perR2 = { 1:0, 2:0, 3:0 };
 d2.json.matchups.forEach(m => { if (m.matchId) perR2[m.round]++; });
 A(perR2[1]===1 && perR2[2]===1 && perR2[3]===1, '個人每輪 1 場 (5人→2隊4人+1輪空)');
 
+// 連續兩次 build-all 不應疊加 (清空重建)
+const c1 = await call('/api/events/'+EID+'/matches?round=1');
+await call('/api/events/'+EID+'/build-all','POST',{});
+const c2 = await call('/api/events/'+EID+'/matches?round=1');
+A(c1.json.length===2 && c2.json.length===2, '連續兩次不疊加 (清空重建正確)');
+
 console.log(`\n結果: ${ok} ok, ${fail} fail`);
 try { unlinkSync(TEST_DB); } catch {}
 process.exit(fail?1:0);
