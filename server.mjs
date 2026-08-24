@@ -21,6 +21,12 @@ export async function handleRequest(req, res) {
   };
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p = url.pathname;
+  const getOrigin = (req) => {
+    const fwdHost = req.headers?.['x-forwarded-host'];
+    const fwdProto = req.headers?.['x-forwarded-proto'] || 'https';
+    if (fwdHost) return `${fwdProto}://${fwdHost}`;
+    return url.origin;
+  };
   const j = () => readBody(req);
 
   // ---------- 靜態頁: 首頁比賽列表 / 後台 / 掃碼報名 ----------
@@ -69,7 +75,7 @@ export async function handleRequest(req, res) {
     // 報名 QR 碼 (回傳 PNG dataURL)
     if (p.startsWith('/api/events/') && p.endsWith('/qrcode') && req.method === 'GET') {
       const id = Number(p.split('/')[3]);
-      const link = `${url.origin}/r/${id}`;
+      const link = `${getOrigin(req)}/r/${id}`;
       const dataUrl = await QRCode.toDataURL(link, { margin: 2, width: 360 });
       return send(200, { link, qrcode: dataUrl });
     }
