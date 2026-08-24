@@ -210,7 +210,8 @@ async function loadMatches() {
   const ev = await api('/api/events/' + EID + '/detail');
   const mode = ev?.rule?.scoring_mode || 'individual';
   const roundNo = Number($('sc-round').value) || 1;
-  const teams = await api('/api/events/' + EID + '/teams?round=' + roundNo);
+  const teamsUrl = mode === 'team' ? ('/api/events/' + EID + '/teams') : ('/api/events/' + EID + '/teams?round=' + roundNo);
+  const teams = await api(teamsUrl);
   TEAM_MAP = {};
   (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members.map(m => m.name).join(' + '); });
   const ms = await api('/api/events/' + EID + '/matches?round=' + roundNo);
@@ -240,7 +241,9 @@ $('btn-build').onclick = async () => {
   } else {
     await api('/api/build-teams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+EID, scoringMode:mode, roundNo }) });
   }
-  const tl = await api('/api/events/' + EID + '/teams?round=' + roundNo);
+  // team 模式固定隊 round_no=NULL, 不帶 round; individual 帶 round
+  const tlUrl = mode === 'team' ? ('/api/events/' + EID + '/teams') : ('/api/events/' + EID + '/teams?round=' + roundNo);
+  const tl = await api(tlUrl);
   const teamIds = (tl||[]).map(t => t.id);
   if (!teamIds.length) { $('sc-msg').className='msg err'; $('sc-msg').textContent='尚無報名選手或無法分組'; return; }
   const d = await api('/api/matchups', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+EID, roundNo, teamIds }) });

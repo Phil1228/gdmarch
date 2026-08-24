@@ -20,6 +20,7 @@ function chunk(arr, size) {
 // team 模式: 建賽時把參賽者配成固定 2 人隊 (round_no = NULL)
 export async function buildTeams(eventId) {
   const ids = await registeredPlayerIds(eventId);
+  if (!ids.length) throw new Error('本場尚無報名選手，請先在名單加入');
   const pairs = chunk(shuffle(ids), 2);
   const teamIds = [];
   for (const m of pairs) teamIds.push(await createTeam(eventId, m, null));
@@ -29,6 +30,7 @@ export async function buildTeams(eventId) {
 // individual 模式: 每輪重新隨機分 2 人隊 (round_no = 該輪)
 export async function buildRoundTeams(eventId, roundNo) {
   const ids = shuffle(await registeredPlayerIds(eventId));
+  if (!ids.length) throw new Error('本場尚無報名選手，請先在名單加入');
   const pairs = chunk(ids, 2);
   const teamIds = [];
   for (const m of pairs) teamIds.push(await createTeam(eventId, m, roundNo));
