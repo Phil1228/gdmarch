@@ -213,6 +213,7 @@ async function loadEvents() {
       <div><div class="name">${ev.name}</div>
         <div class="meta">${evTag(c.scoring_mode)} ${ruleText(c.round_rule)} · 共${c.rounds||'?'}輪 · ID ${ev.id}</div></div>
       <div style="display:flex;gap:8px">
+        <button class="sm" onclick="location.href='/events/${ev.id}'">管理</button>
         <button class="sm ghost" onclick="genLink(${ev.id})">報名連結</button>
       </div>
     </div>`;

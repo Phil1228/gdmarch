@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer,
   createEvent, getEvent, listEvents,
-  registerPlayer, listRegistrations, registeredPlayerIds, listTeams, listMatches,
+  registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, recordMatch, standings } from './tournament.mjs';
 
@@ -35,6 +35,10 @@ export async function handleRequest(req, res) {
   }
   if (p === '/admin' || p === '/admin.html') {
     return serveHtml(res, join(__dirname, 'public', 'admin.html'), {});
+  }
+  if (p.startsWith('/events/')) {
+    const eventId = p.split('/')[2] || '';
+    return serveHtml(res, join(__dirname, 'public', 'event.html'), { eventId });
   }
   if (p.startsWith('/r/')) {
     const eventId = p.split('/')[2];
@@ -89,6 +93,36 @@ export async function handleRequest(req, res) {
     if (p.startsWith('/api/events/') && p.endsWith('/registrations') && req.method === 'GET') {
       const eventId = Number(p.split('/')[3]);
       return send(200, await listRegistrations(eventId));
+    }
+    // ---------- 賽事專屬: 名單 (player 屬於某場比賽) ----------
+    if (p.startsWith('/api/events/') && p.endsWith('/players') && req.method === 'POST') {
+      const eventId = Number(p.split('/')[3]);
+      const b = await j();
+      const { id, badge } = await addPlayer(b.name, b.contact, b.note, b.source || 'manual');
+      await registerPlayer(eventId, id);
+      return send(201, { id, badge });
+    }
+    if (p.startsWith('/api/events/') && p.match(/\/players\/\d+$/) && req.method === 'DELETE') {
+      const parts = p.split('/');
+      const eventId = Number(parts[3]);
+      const pid = Number(parts[5]);
+      await removeRegistration(eventId, pid);
+      return send(200, { ok: true });
+    }
+    if (p.startsWith('/api/events/') && p.endsWith('/import') && req.method === 'POST') {
+      const eventId = Number(p.split('/')[3]);
+      const b = await j();
+      const lines = (b.csv || '').trim().split('\n');
+      const added = [];
+      for (const line of lines) {
+        const cols = line.split(/[,;\t]/).map((s) => s.trim());
+        const name = cols[0];
+        if (!name) continue;
+        const { id, badge } = await addPlayer(name, cols[1] || null, cols[2] || null, 'import');
+        await registerPlayer(eventId, id);
+        added.push({ id, badge, name });
+      }
+      return send(201, { added });
     }
 
     // ---------- 掃碼自行錄入 ----------

@@ -79,6 +79,12 @@ export async function registerPlayer(eventId, playerId) {
     args: [eventId, playerId],
   });
 }
+export async function removeRegistration(eventId, playerId) {
+  await client.execute({
+    sql: 'DELETE FROM registrations WHERE event_id = ? AND player_id = ?',
+    args: [eventId, playerId],
+  });
+}
 export async function listRegistrations(eventId) {
   return (await client.execute({
     sql: `SELECT r.id, r.player_id, p.name, p.badge_no, p.contact, r.status
