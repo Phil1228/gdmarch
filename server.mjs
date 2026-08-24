@@ -22,9 +22,9 @@ export async function handleRequest(req, res) {
   const p = url.pathname;
   const j = () => readBody(req);
 
-  // ---------- 靜態頁: 掃碼報名 ----------
+  // ---------- 靜態頁: 首頁比賽列表 / 掃碼報名 ----------
   if (p === '/' || p === '/index.html') {
-    return serveHtml(res, join(__dirname, 'public', 'register.html'), { eventId: '', eventName: '' });
+    return serveHtml(res, join(__dirname, 'public', 'index.html'), {});
   }
   if (p.startsWith('/r/')) {
     const eventId = p.split('/')[2];

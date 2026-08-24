@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>珑客掼蛋賽務 · 比賽列表</title>
+<style>
+  :root{ --red:#c8102e; --gold:#d4af37; --ink:#1a1a1a; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:-apple-system,"PingFang HK","Microsoft YaHei",sans-serif;
+        background:linear-gradient(160deg,#fff 0%,#fff5f5 100%); color:var(--ink);
+        min-height:100vh; padding:24px 16px 40px; }
+  .wrap{ max-width:560px; margin:0 auto; }
+  .hd{ text-align:center; padding:18px 0 26px; }
+  .hd .logo{ font-size:40px; font-weight:800; letter-spacing:5px; color:var(--red); }
+  .hd .logo span{ color:var(--gold); }
+  .hd .slogan{ margin-top:8px; font-size:14px; color:#888; letter-spacing:1px; }
+  .sec-title{ font-size:15px; color:#999; margin:10px 4px 12px; font-weight:600; }
+  .list{ display:flex; flex-direction:column; gap:14px; }
+  .ev{ background:#fff; border:1px solid #ffe0e0; border-radius:16px; padding:18px 20px;
+       box-shadow:0 6px 20px rgba(200,16,46,.08); text-decoration:none; color:inherit;
+       display:block; transition:transform .12s, box-shadow .12s; }
+  .ev:hover{ transform:translateY(-2px); box-shadow:0 10px 26px rgba(200,16,46,.16); }
+  .ev .name{ font-size:19px; font-weight:700; color:var(--ink); }
+  .ev .meta{ margin-top:8px; font-size:13px; color:#888; display:flex; flex-wrap:wrap; gap:10px; }
+  .ev .tag{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+  .tag.team{ background:#fde8ec; color:var(--red); }
+  .tag.individual{ background:#e8f0fd; color:#2a6bd4; }
+  .tag.rule{ background:#fff3df; color:#b8821a; }
+  .empty{ text-align:center; color:#aaa; font-size:14px; padding:40px 0; }
+  .foot{ text-align:center; font-size:12px; color:#bbb; margin-top:34px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hd">
+      <div class="logo">掼<span>蛋</span></div>
+      <div class="slogan">珑客 Loong-Click · 線下比賽賽務系統</div>
+    </div>
+    <div class="sec-title">進行中的比賽</div>
+    <div class="list" id="list"><div class="empty">載入中…</div></div>
+    <div class="foot">掃描比賽 QR 碼或點擊比賽進入報名</div>
+  </div>
+<script>
+  const fmt = (cfg) => {
+    if (!cfg) return {};
+    try { return JSON.parse(cfg); } catch { return {}; }
+  };
+  async function load() {
+    try {
+      const r = await fetch('/api/events');
+      const events = await r.json();
+      const list = document.getElementById('list');
+      if (!Array.isArray(events) || events.length === 0) {
+        list.innerHTML = '<div class="empty">暫無進行中的比賽</div>';
+        return;
+      }
+      list.innerHTML = events.map(ev => {
+        const c = fmt(ev.rule_config);
+        const mode = c.scoring_mode === 'team'
+          ? '<span class="tag team">按隊</span>'
+          : '<span class="tag individual">按個人</span>';
+        const ruleMap = { time:'計時制', rounds:'局數制', untilA:'打過A為止' };
+        const rule = ruleMap[c.round_rule] || '';
+        const ruleTag = rule ? `<span class="tag rule">${rule}</span>` : '';
+        const rounds = c.rounds ? `共 ${c.rounds} 輪` : '';
+        return `<a class="ev" href="/r/${ev.id}">
+          <div class="name">${ev.name}</div>
+          <div class="meta">${mode}${ruleTag}<span>${rounds}</span></div>
+        </a>`;
+      }).join('');
+    } catch (e) {
+      document.getElementById('list').innerHTML = '<div class="empty">載入失敗，請稍後再試</div>';
+    }
+  }
+  load();
+</script>
+</body>
+</html>
