@@ -50,6 +50,20 @@
   .badge-box{ background:#fff8e8; border:2px dashed var(--gold); border-radius:12px; padding:14px; text-align:center; margin-top:10px; }
   .badge-box .n{ font-size:30px; font-weight:800; color:var(--red); letter-spacing:2px; }
   .link-box{ background:#f0f7ff; border:1px solid #cfe3ff; border-radius:9px; padding:10px; font-size:13px; word-break:break-all; margin-top:8px; }
+  /* 牌桌 */
+  .table-wrap{ display:flex; flex-direction:column; align-items:center; gap:8px; margin:6px 0 12px; }
+  .seat-row{ display:flex; align-items:center; justify-content:center; gap:14px; }
+  .seat{ width:150px; min-height:56px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px; background:#fff; border:2px solid #ddd; position:relative; }
+  .seat .pos{ position:absolute; top:4px; left:8px; font-size:11px; font-weight:700; color:#999; }
+  .seat .nm{ font-weight:700; font-size:15px; }
+  .seat .bd{ font-size:12px; color:#888; }
+  .seat.A{ border-color:var(--red); background:#fff3f3; }
+  .seat.B{ border-color:#1565c0; background:#f0f6ff; }
+  .seat .role{ position:absolute; bottom:4px; right:8px; font-size:10px; font-weight:700; }
+  .seat.A .role{ color:var(--red); } .seat.B .role{ color:#1565c0; }
+  .table-mid{ width:340px; height:84px; border-radius:50%; background:radial-gradient(circle at 50% 40%, #2e7d4f, #1b5e36); display:flex; align-items:center; justify-content:center; color:#cfe9d8; font-weight:700; letter-spacing:2px; box-shadow:inset 0 4px 10px rgba(0,0,0,.3); }
+  .mtitle{ font-size:14px; font-weight:700; color:#444; margin-bottom:2px; }
+  .mresult{ font-size:12px; color:#666; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -213,21 +227,37 @@ async function loadMatches() {
   const teamsUrl = mode === 'team' ? ('/api/events/' + EID + '/teams') : ('/api/events/' + EID + '/teams?round=' + roundNo);
   const teams = await api(teamsUrl);
   TEAM_MAP = {};
-  (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members.map(m => m.name).join(' + '); });
+  (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members; }); // 存成員陣列 [{id,name,badge}]
   const ms = await api('/api/events/' + EID + '/matches?round=' + roundNo);
   const box = $('sc-matches');
-  if (!Array.isArray(ms) || !ms.length) { box.innerHTML = '<span class="muted">本輪尚無對陣，請點「生成對陣」</span>'; return; }
+  if (!Array.isArray(ms) || !ms.length) { box.innerHTML = '<span class="muted">本輪尚無對陣，請點「生成所有輪次對陣」</span>'; return; }
+  // 牌桌: teamA 坐 北+南(對角), teamB 坐 東+西(對角)
+  const seatHtml = (member, side, pos) => {
+    if (!member) return `<div class="seat ${side}"><span class="pos">${pos}</span><span class="nm muted">輪空</span></div>`;
+    return `<div class="seat ${side}"><span class="pos">${pos}</span><span class="nm">${member.name}</span><span class="bd">#${member.badge||'?'}</span><span class="role">${side==='A'?'紅隊':'藍隊'}</span></div>`;
+  };
   box.innerHTML = ms.map(m => {
-    const a = TEAM_MAP[m.team_a] || ('隊'+m.team_a);
-    const b = TEAM_MAP[m.team_b] || ('隊'+m.team_b);
-    const done = m.winner ? `<span class="bye">已記分：${m.winner==='draw'?'平局':(m.winner+'勝')} (${m.score_a??''}:${m.score_b??''})</span>` : '';
-    return `<div class="match" data-id="${m.id}">
-      <div class="vs"><div class="team">${a}</div><div class="x">VS</div><div class="team">${b}</div></div>
-      <div class="acts">
-        <button onclick="rec(${m.id},'A')">A勝</button>
-        <button onclick="rec(${m.id},'B')">B勝</button>
+    const A = TEAM_MAP[m.team_a] || [];
+    const B = TEAM_MAP[m.team_b] || [];
+    const done = m.winner ? `<div class="mresult">已記分：${m.winner==='draw'?'平局':(m.winner+'勝')} (${m.score_a??''}:${m.score_b??''})</div>` : '';
+    const title = `<div class="mtitle">桌 #${m.id}（第 ${m.round_no||roundNo} 輪）</div>`;
+    const acts = m.winner ? '' : `<div class="acts">
+        <button onclick="rec(${m.id},'A')">紅隊勝</button>
+        <button onclick="rec(${m.id},'B')">藍隊勝</button>
         <button class="ghost" onclick="rec(${m.id},'draw')">平局</button>
-      </div>${done}
+      </div>`;
+    return `<div class="match" data-id="${m.id}">
+      ${title}
+      <div class="table-wrap">
+        <div class="seat-row">${seatHtml(A[0], 'A', '北')}</div>
+        <div class="seat-row">
+          ${seatHtml(B[0], 'B', '西')}
+          <div class="table-mid">掼蛋</div>
+          ${seatHtml(B[1], 'B', '東')}
+        </div>
+        <div class="seat-row">${seatHtml(A[1], 'A', '南')}</div>
+      </div>
+      ${acts}${done}
     </div>`;
   }).join('');
 }
