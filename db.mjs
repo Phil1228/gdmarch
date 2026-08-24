@@ -7,13 +7,26 @@ const url = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || `file:
 const authToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN || undefined;
 
 let _client = null;
+let _ensured = false;
 function getClient() {
   if (!_client) _client = createClient(authToken ? { url, authToken } : { url });
   return _client;
 }
+// 補齊舊表缺失欄位 (線上 polybox-db 不會重跑 schema.sql)
+async function ensureSchema() {
+  if (_ensured) return;
+  _ensured = true;
+  for (const col of ['level_a', 'level_b']) {
+    try { await client.execute(`ALTER TABLE matches ADD COLUMN ${col} TEXT`); }
+    catch { /* 已存在則忽略 */ }
+  }
+}
 const client = new Proxy({}, {
   get(_t, prop) {
-    return (...args) => getClient()[prop](...args);
+    return async (...args) => {
+      await ensureSchema();
+      return getClient()[prop](...args);
+    };
   },
 });
 export default client;

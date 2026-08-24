@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS matches (
   score_b INTEGER,
   points_a INTEGER,
   points_b INTEGER,
+  level_a TEXT,            -- 紅隊本局打到的級 (2,3,...,J,Q,K,A1,A2,FIN)
+  level_b TEXT,            -- 藍隊本局打到的級
   recorded_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (event_id) REFERENCES events(id),
   FOREIGN KEY (team_a) REFERENCES teams(id),

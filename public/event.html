@@ -64,6 +64,16 @@
   .table-mid{ width:340px; height:84px; border-radius:50%; background:radial-gradient(circle at 50% 40%, #2e7d4f, #1b5e36); display:flex; align-items:center; justify-content:center; color:#cfe9d8; font-weight:700; letter-spacing:2px; box-shadow:inset 0 4px 10px rgba(0,0,0,.3); }
   .mtitle{ font-size:14px; font-weight:700; color:#444; margin-bottom:2px; }
   .mresult{ font-size:12px; color:#666; margin-top:4px; }
+  .round-btns{ display:flex; flex-wrap:wrap; gap:6px; }
+  .round-btns button{ padding:8px 14px; border-radius:8px; border:1.5px solid #e0e0e0; background:#fff; font-size:14px; font-weight:600; color:#666; cursor:pointer; }
+  .round-btns button.active{ background:var(--red); color:#fff; border-color:var(--red); }
+  .round-teams{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .rt-team{ border:1.5px solid #ddd; border-radius:10px; padding:8px 12px; min-width:160px; background:#fafafa; }
+  .rt-team .rt-h{ font-size:12px; font-weight:700; color:#888; margin-bottom:4px; }
+  .rt-team.A{ border-color:var(--red); background:#fff3f3; } .rt-team.A .rt-h{ color:var(--red); }
+  .rt-team.B{ border-color:#1565c0; background:#f0f6ff; } .rt-team.B .rt-h{ color:#1565c0; }
+  .rt-team .m{ font-size:13px; padding:2px 0; }
+  .rt-team .m .bd{ color:#999; font-size:11px; margin-left:4px; }
 </style>
 </head>
 <body>
@@ -120,14 +130,15 @@
     <div class="card">
       <h3>對陣表（所有輪次）</h3>
       <div class="row">
-        <div><label>檢視輪次</label><input id="sc-round" type="number" value="1" min="1"></div>
-        <div style="flex:0"><button id="btn-build">生成所有輪次對陣</button></div>
+        <div style="flex:1"><label>選擇輪次</label><div id="round-btns" class="round-btns"></div></div>
+        <div style="flex:0"><button id="btn-build">生成對陣表</button></div>
         <div style="flex:0"><button class="sm ghost" id="btn-refresh">重置對陣</button></div>
       </div>
       <div class="msg" id="sc-msg"></div>
     </div>
     <div class="card">
       <h3>對陣表</h3>
+      <div id="round-teams" class="round-teams"></div>
       <div id="sc-matches"><span class="muted">尚未生成</span></div>
     </div>
   </div>
@@ -219,11 +230,25 @@ async function delPlayer(pid) {
 }
 
 // 分組記分
+const LEVELS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A1','A2','FIN'];
+let CUR_ROUND = 1, TOTAL_ROUNDS = 1;
 let TEAM_MAP = {};
+function renderRoundButtons() {
+  const box = $('round-btns');
+  if (TOTAL_ROUNDS < 1) { box.innerHTML = ''; return; }
+  let h = '';
+  for (let r = 1; r <= TOTAL_ROUNDS; r++) {
+    h += `<button class="${r===CUR_ROUND?'active':''}" onclick="selRound(${r})">第 ${r} 輪</button>`;
+  }
+  box.innerHTML = h;
+}
+window.selRound = (r) => { CUR_ROUND = r; renderRoundButtons(); loadMatches(); };
 async function loadMatches() {
   const ev = await api('/api/events/' + EID + '/detail');
   const mode = ev?.rule?.scoring_mode || 'individual';
-  const roundNo = Number($('sc-round').value) || 1;
+  TOTAL_ROUNDS = ev?.rule?.rounds || 1;
+  renderRoundButtons();
+  const roundNo = CUR_ROUND;
   const teamsUrl = mode === 'team' ? ('/api/events/' + EID + '/teams') : ('/api/events/' + EID + '/teams?round=' + roundNo);
   const teams = await api(teamsUrl);
   TEAM_MAP = {};
@@ -236,15 +261,35 @@ async function loadMatches() {
     if (!member) return `<div class="seat ${side}"><span class="pos">${pos}</span><span class="nm muted">輪空</span></div>`;
     return `<div class="seat ${side}"><span class="pos">${pos}</span><span class="nm">${member.name}</span><span class="bd">#${member.badge||'?'}</span><span class="role">${side==='A'?'紅隊':'藍隊'}</span></div>`;
   };
+  const lvOpts = (sel) => LEVELS.map(l => `<option ${l===sel?'selected':''}>${l}</option>`).join('');
+  const teamLabel = (side) => side==='A' ? '紅隊' : '藍隊';
+  const resultText = (m) => {
+    if (!m.winner) return '';
+    const lav = m.level_a||'?', lbv = m.level_b||'?';
+    if (m.winner==='draw') return `<div class="mresult">平局（紅 ${lav} / 藍 ${lbv} 同級）</div>`;
+    const w = m.winner==='A' ? '紅隊' : '藍隊';
+    const lv = m.winner==='A' ? lav : lbv;
+    return `<div class="mresult">${w}勝（紅 ${lav} / 藍 ${lbv}，勝方 ${lv}）</div>`;
+  };
+  // 本輪分隊列表
+  const rtBox = $('round-teams');
+  const allTeams = Object.values(TEAM_MAP).filter(Boolean);
+  rtBox.innerHTML = allTeams.map((members, i) => {
+    const side = (i % 2 === 0) ? 'A' : 'B';
+    const mm = members.map(m => `<div class="m">${m.name}<span class="bd">#${m.badge||'?'}</span></div>`).join('');
+    return `<div class="rt-team ${side}"><div class="rt-h">${teamLabel(side)} ${i+1}</div>${mm}</div>`;
+  }).join('') || '<span class="muted">尚無分隊</span>';
   box.innerHTML = ms.map(m => {
     const A = TEAM_MAP[m.team_a] || [];
     const B = TEAM_MAP[m.team_b] || [];
-    const done = m.winner ? `<div class="mresult">已記分：${m.winner==='draw'?'平局':(m.winner+'勝')} (${m.score_a??''}:${m.score_b??''})</div>` : '';
+    const done = resultText(m);
     const title = `<div class="mtitle">桌 #${m.id}（第 ${m.round_no||roundNo} 輪）</div>`;
-    const acts = m.winner ? '' : `<div class="acts">
-        <button onclick="rec(${m.id},'A')">紅隊勝</button>
-        <button onclick="rec(${m.id},'B')">藍隊勝</button>
-        <button class="ghost" onclick="rec(${m.id},'draw')">平局</button>
+    const acts = m.winner ? '' : `<div class="acts" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="seat A" style="min-width:auto;padding:4px 8px"><span class="role">紅隊</span></span>
+        <select id="lvA-${m.id}">${lvOpts(m.level_a)}</select>
+        <span class="seat B" style="min-width:auto;padding:4px 8px"><span class="role">藍隊</span></span>
+        <select id="lvB-${m.id}">${lvOpts(m.level_b)}</select>
+        <button onclick="recLevel(${m.id})">記錄</button>
       </div>`;
     return `<div class="match" data-id="${m.id}">
       ${title}
@@ -273,19 +318,17 @@ $('btn-build').onclick = async () => {
     $('sc-msg').className='msg err'; $('sc-msg').textContent = '失敗：' + (e.message || '');
     return;
   }
-  $('sc-round').max = rounds;
-  // 跳到最後一輪顯示
-  $('sc-round').value = rounds;
-  loadMatches();
+  CUR_ROUND = rounds; renderRoundButtons(); loadMatches();
 };
 $('btn-refresh').onclick = async () => {
   if (!confirm('重整會清空所有已生成的對陣與已記分，重新隨機生成。確定？')) return;
   $('btn-build').click();
 };
-$('sc-round').onchange = loadMatches;
-window.rec = async (matchId, winner) => {
-  const d = await api('/api/matches', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ matchId, winner }) });
-  if (d.points_a !== undefined) { $('sc-msg').className='msg ok'; $('sc-msg').textContent='已記分'; loadMatches(); }
+window.recLevel = async (matchId) => {
+  const lvA = $('lvA-' + matchId).value;
+  const lvB = $('lvB-' + matchId).value;
+  const d = await api('/api/matches', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ matchId, levelA: lvA, levelB: lvB }) });
+  if (d.winner) { $('sc-msg').className='msg ok'; $('sc-msg').textContent='已記分 (' + (d.winner==='draw'?'平局':d.winner+'勝') + ')'; loadMatches(); }
   else { $('sc-msg').className='msg err'; $('sc-msg').textContent='失敗：'+(d.error||''); }
 };
 

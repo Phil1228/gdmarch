@@ -124,21 +124,29 @@ export async function buildMatchups(eventId, roundNo, teamIds) {
   return { matchups: persisted, bye };
 }
 
-// ---------- 記分 (自動算 points) ----------
-// winner: "A" | "B" | "draw"
-// draw 只在 round_rule = time/rounds 時合法; untilA 必分勝負
-export async function recordMatch(matchId, winner, scoreA = null, scoreB = null) {
-  let pa = 0, pb = 0;
-  if (winner === 'A') { pa = 2; pb = 0; }
-  else if (winner === 'B') { pa = 0; pb = 2; }
-  else if (winner === 'draw') { pa = 1; pb = 1; }
-  else throw new Error('invalid winner');
+// ---------- 掼蛋級別 (升級順序, 索引越大級越高) ----------
+export const LEVELS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A1','A2','FIN'];
+function levelIndex(lv) {
+  const i = LEVELS.indexOf(lv);
+  return i < 0 ? -1 : i;
+}
+
+// ---------- 記分 (按兩隊級別自動判勝負, 算 points) ----------
+// levelA: 紅隊本局打到的級; levelB: 藍隊本局打到的級
+// 級高者勝; 同級視為平局
+export async function recordMatch(matchId, levelA, levelB) {
+  const ia = levelIndex(levelA), ib = levelIndex(levelB);
+  if (ia < 0 || ib < 0) throw new Error('無效的級別');
+  let winner, pa, pb;
+  if (ia > ib) { winner = 'A'; pa = 2; pb = 0; }
+  else if (ib > ia) { winner = 'B'; pa = 0; pb = 2; }
+  else { winner = 'draw'; pa = 1; pb = 1; } // 同級平局
   await client.execute({
-    sql: `UPDATE matches SET winner = ?, score_a = ?, score_b = ?, points_a = ?, points_b = ?
+    sql: `UPDATE matches SET winner = ?, level_a = ?, level_b = ?, points_a = ?, points_b = ?
           WHERE id = ?`,
-    args: [winner, scoreA, scoreB, pa, pb, matchId],
+    args: [winner, levelA, levelB, pa, pb, matchId],
   });
-  return { points_a: pa, points_b: pb };
+  return { winner, points_a: pa, points_b: pb };
 }
 
 // ---------- 積分榜 ----------

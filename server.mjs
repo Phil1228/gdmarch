@@ -181,7 +181,7 @@ export async function handleRequest(req, res) {
     // ---------- 記分 ----------
     if (p === '/api/matches' && req.method === 'POST') {
       const b = await j();
-      const r = await recordMatch(b.matchId, b.winner, b.scoreA, b.scoreB);
+      const r = await recordMatch(b.matchId, b.levelA, b.levelB);
       return send(201, r);
     }
     if (p.startsWith('/api/events/') && p.endsWith('/standings') && req.method === 'GET') {
