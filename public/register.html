@@ -70,6 +70,15 @@
     document.getElementById('msg').className = 'msg err';
     document.getElementById('msg').textContent = '無效的報名連結';
     document.getElementById('f').style.display = 'none';
+  } else {
+    // 檢查比賽狀態: 已開始則禁止報名
+    fetch('/api/events/' + evId + '/detail').then(r => r.json()).then(ev => {
+      if (ev && ev.status === 'started') {
+        document.getElementById('msg').className = 'msg err';
+        document.getElementById('msg').textContent = '比賽已經開始，無法報名';
+        document.getElementById('f').style.display = 'none';
+      }
+    }).catch(() => {});
   }
   document.getElementById('f').addEventListener('submit', async (e) => {
     e.preventDefault();

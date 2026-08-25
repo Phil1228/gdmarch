@@ -20,6 +20,8 @@ async function ensureSchema() {
     try { await client.execute(`ALTER TABLE matches ADD COLUMN ${col} TEXT`); }
     catch { /* 已存在則忽略 */ }
   }
+  try { await client.execute("ALTER TABLE events ADD COLUMN status TEXT DEFAULT 'open'"); }
+  catch { /* 已存在則忽略 */ }
 }
 const client = new Proxy({}, {
   get(_t, prop) {
@@ -70,10 +72,13 @@ export async function createEvent(name, ruleConfig = {}) {
     }
   }
   const r = await client.execute({
-    sql: 'INSERT INTO events (name, rule_config) VALUES (?, ?)',
-    args: [name, JSON.stringify(ruleConfig)],
+    sql: 'INSERT INTO events (name, rule_config, status) VALUES (?, ?, ?)',
+    args: [name, JSON.stringify(ruleConfig), 'open'],
   });
   return Number(r.lastInsertRowid);
+}
+export async function setEventStatus(id, status) {
+  await client.execute({ sql: 'UPDATE events SET status = ? WHERE id = ?', args: [status, id] });
 }
 export async function getEvent(id) {
   const r = await client.execute({ sql: 'SELECT * FROM events WHERE id = ?', args: [id] });

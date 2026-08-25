@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer,
-  createEvent, getEvent, listEvents,
+  createEvent, getEvent, listEvents, setEventStatus,
   registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
@@ -76,6 +76,12 @@ export async function handleRequest(req, res) {
       const id = Number(p.split('/')[3]);
       return send(200, await getEvent(id));
     }
+    if (p.startsWith('/api/events/') && p.endsWith('/status') && req.method === 'POST') {
+      const id = Number(p.split('/')[3]);
+      const b = await j();
+      await setEventStatus(id, b.status);
+      return send(200, { ok: true, status: b.status });
+    }
     // 報名 QR 碼 (回傳 PNG dataURL)
     if (p.startsWith('/api/events/') && p.endsWith('/qrcode') && req.method === 'GET') {
       const id = Number(p.split('/')[3]);
@@ -128,6 +134,10 @@ export async function handleRequest(req, res) {
     // ---------- 掃碼自行錄入 ----------
     if (p === '/api/events/self-register' && req.method === 'POST') {
       const b = await j();
+      const ev = await getEvent(b.eventId);
+      if (ev?.status === 'started') {
+        return send(403, { error: '比賽已經開始，無法報名' });
+      }
       const { id, badge } = await addPlayer(b.name, b.contact, b.note, 'self');
       await registerPlayer(b.eventId, id);
       return send(201, { id, badge });

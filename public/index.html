@@ -73,10 +73,14 @@
         const rule = ruleMap[c.round_rule] || '';
         const ruleTag = rule ? `<span class="tag rule">${rule}</span>` : '';
         const rounds = c.rounds ? `共 ${c.rounds} 輪` : '';
+        const st = ev.status || 'open';
+        const stMap = { open:'報名中', started:'進行中', closed:'已結束' };
+        const stClass = { open:'team', started:'individual', closed:'rule' }[st] || 'team';
+        const stTag = `<span class="tag ${stClass}">${stMap[st]||st}</span>`;
         return `<a class="ev" href="/r/${ev.id}">
           <span class="go" onclick="event.preventDefault(); location.href='/events/${ev.id}'">管理 ›</span>
           <div class="name">${ev.name}</div>
-          <div class="meta">${mode}${ruleTag}<span>${rounds}</span></div>
+          <div class="meta">${stTag}${mode}${ruleTag}<span>${rounds}</span></div>
         </a>`;
       }).join('');
     } catch (e) {

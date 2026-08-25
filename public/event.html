@@ -13,6 +13,10 @@
   .top .logo span{ color:var(--gold); }
   .top .ev{ font-size:14px; opacity:.95; }
   .top a{ color:#fff; opacity:.85; font-size:13px; text-decoration:none; margin-left:10px; }
+  .top .st{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:700; margin-left:10px; border:1px solid rgba(255,255,255,.6); }
+  .top .st.open{ background:rgba(255,255,255,.18); }
+  .top .st.started{ background:#fff; color:var(--red); }
+  .top .st.closed{ background:rgba(0,0,0,.25); }
   .wrap{ max-width:860px; margin:0 auto; padding:16px; }
   .tabs{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
   .tab{ padding:9px 16px; background:#fff; border:1px solid var(--line); border-radius:10px; cursor:pointer; font-size:14px; font-weight:600; color:#666; }
@@ -83,6 +87,8 @@
     <div class="ev" id="ev-title">載入中…</div>
   </div>
   <div>
+    <span class="st" id="ev-status"></span>
+    <button class="sm" id="btn-start">開始比賽</button>
     <button class="sm" id="btn-qr">報名 QR</button>
     <a href="/admin">後台</a>
     <a href="/">首頁</a>
@@ -186,6 +192,18 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
 });
 
 // 比賽資訊
+const ST_MAP = { open:'報名中', started:'進行中', closed:'已結束' };
+async function renderStatus(ev) {
+  const st = ev?.status || 'open';
+  const el = $('ev-status');
+  el.className = 'st ' + st;
+  el.textContent = ST_MAP[st] || st;
+  // 按鈕文案隨狀態變
+  const btn = $('btn-start');
+  if (st === 'open') { btn.style.display=''; btn.textContent='開始比賽'; }
+  else if (st === 'started') { btn.style.display=''; btn.textContent='結束比賽'; }
+  else { btn.style.display='none'; }
+}
 async function loadInfo() {
   const ev = await api('/api/events/' + EID + '/detail');
   if (!ev || !ev.id) { $('ev-title').textContent = '比賽不存在'; return; }
@@ -193,7 +211,15 @@ async function loadInfo() {
   const mode = c.scoring_mode === 'team' ? '按隊' : '按個人';
   const rule = ({ time:'計時制', rounds:'局數制', untilA:'打過A為止' }[c.round_rule] || '');
   $('ev-title').textContent = `${ev.name} · ${mode} · 共${c.rounds||'?'}輪 · ${rule}`;
+  renderStatus(ev);
 }
+$('btn-start').onclick = async () => {
+  const ev = await api('/api/events/' + EID + '/detail');
+  const cur = ev?.status || 'open';
+  const next = cur === 'open' ? 'started' : (cur === 'started' ? 'closed' : 'open');
+  await api('/api/events/' + EID + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status: next }) });
+  loadInfo();
+};
 
 // 名單
 async function loadRoster() {
