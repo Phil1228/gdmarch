@@ -50,6 +50,9 @@
       <div class="slogan">珑客 Loong-Click · 線下比賽賽務系統</div>
       </div>
       <div class="user-bar" id="user-bar"></div>
+      <div class="admin-bar">
+        <a href="/admin">進入管理後台</a>
+      </div>
       <div class="sec-title">進行中的比賽</div>
     <div class="list" id="list"><div class="empty">載入中…</div></div>
     <div class="foot">掃描比賽 QR 碼或點擊比賽進入報名</div>
@@ -98,11 +101,9 @@
         const vis = ev.visibility === 'private' ? '<span class="tag private">私享</span>' : '';
         // 私享賽未登入 -> 點報名跳登入
         const href = (ev.visibility === 'private' && !ME) ? '/login' : `/r/${ev.id}`;
-        const goHref = (ev.visibility === 'private' && !ME) ? '/login' : `/events/${ev.id}`;
         const viewHref = (ev.visibility === 'private' && !ME) ? '/login' : `/view/${ev.id}`;
         return `<a class="ev" href="${href}">
           <span class="go" onclick="event.preventDefault(); location.href='${viewHref}'">查看 ›</span>
-          <span class="go mgmt" onclick="event.preventDefault(); location.href='${goHref}'">管理 ›</span>
           <div class="name">${ev.name}</div>
           <div class="meta">${stTag}${vis}${mode}${ruleTag}<span>${rounds}</span></div>
         </a>`;
