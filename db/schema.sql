@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 -- 用戶
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS gd_users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 登入 session
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS gd_sessions (
   token TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
