@@ -36,6 +36,7 @@
     box-shadow:0 6px 16px rgba(200,16,46,.18); }
   .admin-bar a:hover{ transform:translateY(-1px); }
   .ev .go{ position:absolute; top:14px; right:18px; font-size:13px; color:var(--red); font-weight:600; cursor:pointer; }
+  .ev .go.mgmt{ right:auto; left:18px; color:#888; }
   .user-bar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
   .user-bar .u{ font-size:14px; color:#666; }
   .user-bar a{ color:var(--red); text-decoration:none; font-weight:600; font-size:14px; }
@@ -49,10 +50,7 @@
       <div class="slogan">珑客 Loong-Click · 線下比賽賽務系統</div>
       </div>
       <div class="user-bar" id="user-bar"></div>
-      <div class="admin-bar">
-      <a href="/admin">進入管理後台</a>
-    </div>
-    <div class="sec-title">進行中的比賽</div>
+      <div class="sec-title">進行中的比賽</div>
     <div class="list" id="list"><div class="empty">載入中…</div></div>
     <div class="foot">掃描比賽 QR 碼或點擊比賽進入報名</div>
   </div>
@@ -101,8 +99,10 @@
         // 私享賽未登入 -> 點報名跳登入
         const href = (ev.visibility === 'private' && !ME) ? '/login' : `/r/${ev.id}`;
         const goHref = (ev.visibility === 'private' && !ME) ? '/login' : `/events/${ev.id}`;
+        const viewHref = (ev.visibility === 'private' && !ME) ? '/login' : `/view/${ev.id}`;
         return `<a class="ev" href="${href}">
-          <span class="go" onclick="event.preventDefault(); location.href='${goHref}'">管理 ›</span>
+          <span class="go" onclick="event.preventDefault(); location.href='${viewHref}'">查看 ›</span>
+          <span class="go mgmt" onclick="event.preventDefault(); location.href='${goHref}'">管理 ›</span>
           <div class="name">${ev.name}</div>
           <div class="meta">${stTag}${vis}${mode}${ruleTag}<span>${rounds}</span></div>
         </a>`;

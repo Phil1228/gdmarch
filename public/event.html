@@ -63,6 +63,9 @@
   /* 牌桌 */
   .table-wrap{ display:flex; flex-direction:column; align-items:center; gap:8px; margin:6px 0 12px; width:100%; max-width:420px; }
   .seat-row{ display:flex; align-items:center; justify-content:center; gap:14px; width:100%; flex-wrap:wrap; }
+  .seat-row.mid-row{ flex-wrap:nowrap; gap:6px; }
+  .seat-row.mid-row .seat{ flex:1 1 0; min-width:0; max-width:34%; }
+  .seat-row.mid-row .table-mid{ flex:0 0 32%; width:auto; height:auto; aspect-ratio:1 / 1; }
   .seat{ width:min(150px, 40vw); min-height:56px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px; background:#fff; border:2px solid #ddd; position:relative; }
   .seat .pos{ position:absolute; top:4px; left:8px; font-size:11px; font-weight:700; color:#999; }
   .seat .nm{ font-weight:700; font-size:min(15px, 4vw); word-break:break-word; text-align:center; }
@@ -381,7 +384,7 @@ async function loadMatches() {
         ${title}
         <div class="table-wrap">
           <div class="seat-row">${seatHtml(A[0], 'A', '北')}</div>
-          <div class="seat-row">
+          <div class="seat-row mid-row">
             ${seatHtml(B[0], 'B', '西')}
             <div class="table-mid">掼蛋</div>
             ${seatHtml(B[1], 'B', '東')}
@@ -409,7 +412,7 @@ async function loadMatches() {
       ${title}
       <div class="table-wrap">
         <div class="seat-row">${seatHtml(A[0], 'A', '北')}</div>
-        <div class="seat-row">
+        <div class="seat-row mid-row">
           ${seatHtml(B[0], 'B', '西')}
           <div class="table-mid">掼蛋</div>
           ${seatHtml(B[1], 'B', '東')}

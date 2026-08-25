@@ -44,6 +44,10 @@ export async function handleRequest(req, res) {
     const eventId = p.split('/')[2] || '';
     return serveHtml(res, join(__dirname, 'public', 'event.html'), { eventId });
   }
+  if (p.startsWith('/view/')) {
+    const eventId = p.split('/')[2] || '';
+    return serveHtml(res, join(__dirname, 'public', 'view.html'), { eventId });
+  }
   if (p.startsWith('/r/')) {
     const eventId = p.split('/')[2];
     try {

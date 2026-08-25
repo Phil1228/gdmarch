@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='15' fill='%23c8102e'/><text x='16' y='22' font-size='18' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>掼</text></svg>">
+<title>比賽查看</title>
+<style>
+  :root{ --red:#c8102e; --gold:#d4af37; --ink:#1a1a1a; --line:#eee; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:-apple-system,"PingFang HK","Microsoft YaHei",sans-serif; background:#f5f6f8; color:var(--ink); }
+  .top{ background:linear-gradient(135deg,var(--red),#a00d24); color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  .top .logo{ font-weight:800; letter-spacing:2px; font-size:17px; }
+  .top .logo span{ color:var(--gold); }
+  .top .ev{ font-size:14px; opacity:.95; }
+  .top a{ color:#fff; opacity:.85; font-size:13px; text-decoration:none; margin-left:10px; }
+  .top .st{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:700; margin-left:10px; border:1px solid rgba(255,255,255,.6); }
+  .top .st.open{ background:rgba(255,255,255,.18); }
+  .top .st.started{ background:#fff; color:var(--red); }
+  .top .st.closed{ background:rgba(0,0,0,.25); }
+  .wrap{ max-width:720px; margin:0 auto; padding:14px; }
+  .tabs{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .tab{ padding:9px 16px; background:#fff; border:1px solid var(--line); border-radius:10px; cursor:pointer; font-size:14px; font-weight:600; color:#666; }
+  .tab.active{ background:var(--red); color:#fff; border-color:var(--red); }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:12px; }
+  .card h3{ font-size:15px; margin-bottom:10px; }
+  .muted{ color:#999; font-size:13px; }
+  /* 牌桌 */
+  .table-wrap{ display:flex; flex-direction:column; align-items:center; gap:8px; margin:6px 0 12px; width:100%; max-width:420px; }
+  .seat-row{ display:flex; align-items:center; justify-content:center; gap:14px; width:100%; flex-wrap:wrap; }
+  .seat-row.mid-row{ flex-wrap:nowrap; gap:6px; }
+  .seat-row.mid-row .seat{ flex:1 1 0; min-width:0; max-width:34%; }
+  .seat-row.mid-row .table-mid{ flex:0 0 32%; width:auto; height:auto; aspect-ratio:1 / 1; }
+  .seat{ width:min(150px, 40vw); min-height:56px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px; background:#fff; border:2px solid #ddd; position:relative; }
+  .seat .pos{ position:absolute; top:4px; left:8px; font-size:11px; font-weight:700; color:#999; }
+  .seat .nm{ font-weight:700; font-size:min(15px, 4vw); word-break:break-word; text-align:center; }
+  .seat .bd{ font-size:12px; color:#888; }
+  .seat.A{ border-color:var(--red); background:#fff3f3; }
+  .seat.B{ border-color:#1565c0; background:#f0f6ff; }
+  .seat .role{ position:absolute; bottom:4px; right:8px; font-size:10px; font-weight:700; }
+  .seat.A .role{ color:var(--red); } .seat.B .role{ color:#1565c0; }
+  .table-mid{ width:min(340px, 72vw); height:min(84px, 20vw); border-radius:50%; background:radial-gradient(circle at 50% 40%, #2e7d4f, #1b5e36); display:flex; align-items:center; justify-content:center; color:#cfe9d8; font-weight:700; letter-spacing:2px; box-shadow:inset 0 4px 10px rgba(0,0,0,.3); }
+  .mtitle{ font-size:14px; font-weight:700; color:#444; margin-bottom:2px; }
+  .mresult{ font-size:12px; color:#666; margin-top:4px; }
+  .match{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+  /* 名單 */
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  th,td{ padding:9px 10px; text-align:left; border-bottom:1px solid var(--line); }
+  th{ color:#888; font-weight:600; font-size:12px; }
+  /* 積分榜 */
+  .rank{ display:flex; align-items:center; gap:12px; padding:10px; border-bottom:1px solid var(--line); }
+  .rank .pos{ font-size:18px; font-weight:800; width:34px; color:var(--red); }
+  .rank .nm{ font-weight:600; }
+  .rank .pt{ margin-left:auto; font-weight:800; color:var(--gold); }
+  .tn{ font-size:15px; font-weight:700; }
+  .tm{ font-size:13px; color:#666; }
+  .empty{ text-align:center; color:#aaa; font-size:14px; padding:30px 0; }
+  .readonly-badge{ display:inline-block; background:#eee; color:#888; font-size:12px; padding:3px 10px; border-radius:20px; margin-left:8px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <div class="logo">掼<span>蛋</span> 比賽查看</div>
+    <div class="ev" id="ev-title">載入中…</div>
+  </div>
+  <div>
+    <span class="st" id="ev-status"></span>
+    <span class="readonly-badge">只讀</span>
+    <a href="/">首頁</a>
+  </div>
+</div>
+<div class="wrap">
+  <div class="tabs">
+    <div class="tab active" data-tab="roster">名單</div>
+    <div class="tab" data-tab="matches">對陣表</div>
+    <div class="tab" data-tab="standings">積分榜</div>
+  </div>
+  <div class="panel active" id="tab-roster"><div class="card"><div id="roster-box"><span class="muted">載入中…</span></div></div></div>
+  <div class="panel" id="tab-matches"><div class="card">
+    <h3>對陣表</h3>
+    <div class="round-btns" id="round-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+    <div id="matches-box"><span class="muted">載入中…</span></div>
+  </div></div>
+  <div class="panel" id="tab-standings"><div class="card"><div id="standings-box"><span class="muted">載入中…</span></div></div></div>
+</div>
+<script>
+const EID = "__EVENT_ID__";
+const api = (p, o) => fetch(p, o).then(r => r.json().catch(()=>({})));
+const $ = (id) => document.getElementById(id);
+const LEVELS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A1','A2','FIN'];
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  $('tab-' + t.dataset.tab).classList.add('active');
+  if (t.dataset.tab === 'matches') loadMatches(CUR_ROUND);
+  if (t.dataset.tab === 'standings') loadStandings();
+});
+
+let CUR_ROUND = 1;
+const TEAM_MAP = {}; const TM_NAME = {};
+
+async function loadEvent() {
+  const ev = await api('/api/events/' + EID + '/detail');
+  if (!ev || !ev.id) { $('ev-title').textContent = '比賽不存在'; return; }
+  $('ev-title').textContent = ev.name + (ev.visibility === 'private' ? '（私享）' : '');
+  const st = ev.status || 'open';
+  const stMap = { open:'報名中', started:'進行中', closed:'已結束' };
+  const stEl = $('ev-status'); stEl.textContent = stMap[st] || st; stEl.className = 'st ' + st;
+}
+
+async function loadRoster() {
+  const ev = await api('/api/events/' + EID + '/detail');
+  const rows = await api('/api/events/' + EID + '/registrations');
+  const box = $('roster-box');
+  if (!Array.isArray(rows) || !rows.length) { box.innerHTML = '<div class="empty">尚無報名選手</div>'; return; }
+  const mode = ev?.rule?.scoring_mode;
+  box.innerHTML = `<table><thead><tr><th>號牌</th><th>姓名</th><th>手機</th><th>來源</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${r.badge||'-'}</td><td>${r.name}</td><td>${r.contact||''}</td><td>${r.source||''}</td></tr>`).join('') +
+    `</tbody></table><div class="muted" style="margin-top:8px">共 ${rows.length} 人報名${mode==='team'?'（按隊模式）':''}</div>`;
+}
+
+async function loadMatches(roundNo) {
+  const ev = await evDetail || (evDetail = await api('/api/events/' + EID + '/detail'));
+  const teams = await api('/api/events/' + EID + '/teams');
+  (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members; TM_NAME[t.id] = t.name; });
+  const ms = await api('/api/events/' + EID + '/matches' + (roundNo ? '?round=' + roundNo : ''));
+  const box = $('matches-box');
+  if (!Array.isArray(ms) || !ms.length) { box.innerHTML = '<div class="empty">尚無對陣</div>'; return; }
+  // 輪次按鈕 (去重 round_no)
+  const rounds = [...new Set(ms.map(m => m.round_no))].sort((a,b)=>a-b);
+  $('round-btns').innerHTML = rounds.map(r => `<button onclick="loadMatches(${r})" style="padding:7px 13px;border-radius:8px;border:1.5px solid ${r===roundNo?'var(--red)':'#e0e0e0'};background:${r===roundNo?'var(--red)':'#fff'};color:${r===roundNo?'#fff':'#666'};font-weight:600;cursor:pointer">第 ${r} 輪</button>`).join('');
+  const seatHtml = (member, side, pos) => {
+    if (!member) return `<div class="seat ${side}"><span class="pos">${pos}</span><span class="nm muted">輪空</span></div>`;
+    return `<div class="seat ${side}"><span class="pos">${pos}</span><span class="nm">${member.name}</span><span class="bd">#${member.badge||'?'}</span><span class="role">${side==='A'?'紅隊':'藍隊'}</span></div>`;
+  };
+  const resultText = (m) => {
+    if (!m.winner) return '<div class="mresult muted">尚未記分</div>';
+    const lav = m.level_a||'?', lbv = m.level_b||'?';
+    if (m.winner==='draw') return `<div class="mresult">平局（紅 ${lav} / 藍 ${lbv} 同級）</div>`;
+    const w = m.winner==='A' ? '紅隊' : '藍隊';
+    const lv = m.winner==='A' ? lav : lbv;
+    return `<div class="mresult">${w}勝（紅 ${lav} / 藍 ${lbv}，勝方 ${lv}）</div>`;
+  };
+  box.innerHTML = ms.map(m => {
+    const A = TEAM_MAP[m.team_a] || [];
+    const B = TEAM_MAP[m.team_b] || [];
+    return `<div class="match"><div class="mtitle">桌 #${m.id}（第 ${m.round_no} 輪）</div>
+      <div class="table-wrap">
+        <div class="seat-row">${seatHtml(A[0], 'A', '北')}</div>
+        <div class="seat-row mid-row">${seatHtml(B[0], 'B', '西')}<div class="table-mid">掼蛋</div>${seatHtml(B[1], 'B', '東')}</div>
+        <div class="seat-row">${seatHtml(A[1], 'A', '南')}</div>
+      </div>${resultText(m)}</div>`;
+  }).join('');
+}
+let evDetail = null;
+
+async function loadStandings() {
+  const st = await api('/api/events/' + EID + '/standings');
+  const box = $('standings-box');
+  if (!Array.isArray(st) || !st.length) { box.innerHTML = '<div class="empty">尚無積分</div>'; return; }
+  box.innerHTML = st.map((x, i) => {
+    const nm = x.name || x.members?.map(m=>m.name).join(' + ') || x.player_name || ('選手 ' + (x.player_id||''));
+    const pt = x.points ?? 0;
+    return `<div class="rank"><div class="pos">${i+1}</div><div><div class="tn">${nm}</div>${x.members?`<div class="tm">${x.members.map(m=>m.name+' #'+m.badge).join(' · ')}</div>`:''}</div><div class="pt">${pt}</div></div>`;
+  }).join('');
+}
+
+loadEvent();
+loadRoster();
+loadMatches(CUR_ROUND);
+loadStandings();
+</script>
+</body>
+</html>
