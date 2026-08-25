@@ -57,6 +57,15 @@
   .rank .nm{ font-weight:600; }
   .rank .pt{ margin-left:auto; font-weight:800; color:var(--gold); }
   .bye{ color:#b8821a; font-size:13px; margin-top:6px; }
+  /* 滑動開關 */
+  .filter-bar{ display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-bottom:10px; }
+  .filter-bar .lbl{ font-size:14px; color:#666; font-weight:600; }
+  .switch{ position:relative; display:inline-block; width:46px; height:26px; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; cursor:pointer; inset:0; background:#ccc; border-radius:26px; transition:.2s; }
+  .slider:before{ position:absolute; content:""; height:20px; width:20px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.2s; }
+  .switch input:checked + .slider{ background:var(--red); }
+  .switch input:checked + .slider:before{ transform:translateX(20px); }
 </style>
 </head>
 <body>
@@ -113,6 +122,10 @@
       <div class="msg" id="ev-msg"></div>
     </div>
     <div class="card">
+      <div class="filter-bar">
+        <span class="lbl">只看私享賽</span>
+        <label class="switch"><input type="checkbox" id="only-private"><span class="slider"></span></label>
+      </div>
       <h3>比賽列表</h3>
       <div id="ev-list"><span class="muted">載入中…</span></div>
     </div>
@@ -234,7 +247,10 @@ async function loadEvents() {
   const evs = await api('/api/events');
   const box = $('ev-list');
   if (!Array.isArray(evs) || !evs.length) { box.innerHTML = '<span class="muted">尚無比賽</span>'; return; }
-  box.innerHTML = evs.map(ev => {
+  const onlyPrivate = $('only-private')?.checked;
+  const shown = onlyPrivate ? evs.filter(e => e.visibility === 'private') : evs;
+  if (!shown.length) { box.innerHTML = '<span class="muted">暫無符合條件的比賽</span>'; return; }
+  box.innerHTML = shown.map(ev => {
     const c = (ev.rule_config ? JSON.parse(ev.rule_config) : {});
     return `<div class="ev-row">
       <div><div class="name">${ev.name}</div>
@@ -438,6 +454,8 @@ $('btn-st').onclick = async () => {
 
 // 初始
 loadEvents();
+const swA = $('only-private');
+if (swA) swA.addEventListener('change', loadEvents);
 </script>
 </body>
 </html>
