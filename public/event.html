@@ -98,6 +98,7 @@
     <span class="st" id="ev-status"></span>
     <button class="sm" id="btn-start">開始比賽</button>
     <button class="sm" id="btn-qr">報名 QR</button>
+    <span id="me-box" style="font-size:12px;opacity:.9;margin-left:8px"></span>
     <a href="/admin">後台</a>
     <a href="/">首頁</a>
   </div>
@@ -196,6 +197,20 @@
 const EID = "__EVENT_ID__";
 const api = (path, opt) => fetch(path, opt).then(r => r.json().catch(()=>({})));
 const $ = (id) => document.getElementById(id);
+
+// 登入態
+async function loadMe() {
+  try {
+    const d = await (await fetch('/api/auth/me')).json();
+    if (d.user) {
+      $('me-box').innerHTML = `👤 ${d.user.displayName||d.user.username} · <a href="#" onclick="logout()" style="color:#fff;opacity:.85">登出</a>`;
+    } else {
+      $('me-box').innerHTML = `<a href="/login" style="color:#fff;opacity:.9">登入</a>`;
+    }
+  } catch { $('me-box').textContent=''; }
+}
+window.logout = async () => { await fetch('/api/auth/logout',{method:'POST'}); location.href='/'; };
+loadMe();
 
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));

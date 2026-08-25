@@ -10,6 +10,7 @@ import {
   registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches, renameTeam,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
+import * as auth from './auth.mjs';
 
 const PORT = process.env.PORT || 3000;
 
@@ -33,6 +34,9 @@ export async function handleRequest(req, res) {
   if (p === '/' || p === '/index.html') {
     return serveHtml(res, join(__dirname, 'public', 'index.html'), {});
   }
+  if (p === '/login' || p === '/login.html') {
+    return serveHtml(res, join(__dirname, 'public', 'login.html'), {});
+  }
   if (p === '/admin' || p === '/admin.html') {
     return serveHtml(res, join(__dirname, 'public', 'admin.html'), {});
   }
@@ -51,7 +55,54 @@ export async function handleRequest(req, res) {
   }
 
   try {
-    // ---------- 名單 ----------
+    const token = auth.tokenFromReq(req);
+  const me = await auth.getUserByToken(token); // 當前用戶 (null 表示未登入)
+
+  // ---------- 用戶認證 ----------
+  if (p === '/api/auth/register' && req.method === 'POST') {
+    const b = await j();
+    try {
+      const uid = await auth.register(b.username, b.password, b.displayName);
+      const { token: tk, user } = await auth.login(b.username, b.password);
+      res.setHeader('Set-Cookie', `gd_token=${tk}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30*86400}`);
+      return send(201, { user });
+    } catch (e) { return send(400, { error: e.message }); }
+  }
+  if (p === '/api/auth/login' && req.method === 'POST') {
+    const b = await j();
+    try {
+      const { token: tk, user } = await auth.login(b.username, b.password);
+      res.setHeader('Set-Cookie', `gd_token=${tk}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30*86400}`);
+      return send(200, { user });
+    } catch (e) { return send(401, { error: e.message }); }
+  }
+  if (p === '/api/auth/logout' && req.method === 'POST') {
+    await auth.logout(token);
+    res.setHeader('Set-Cookie', 'gd_token=; Path=/; HttpOnly; Max-Age=0');
+    return send(200, { ok: true });
+  }
+  if (p === '/api/auth/me' && req.method === 'GET') {
+    return send(200, { user: me });
+  }
+  // 管理員: 用戶列表 / 重設密碼 / 刪除
+  if (p === '/api/admin/users' && req.method === 'GET') {
+    if (!me || me.role !== 'admin') return send(403, { error: '需要管理員權限' });
+    return send(200, await auth.listUsers());
+  }
+  if (p.match(/\/api\/admin\/users\/\d+\/reset$/) && req.method === 'POST') {
+    if (!me || me.role !== 'admin') return send(403, { error: '需要管理員權限' });
+    const uid = Number(p.split('/')[4]);
+    try { await auth.resetPassword(uid, (await j()).password); return send(200, { ok: true }); }
+    catch (e) { return send(400, { error: e.message }); }
+  }
+  if (p.match(/\/api\/admin\/users\/\d+$/) && req.method === 'DELETE') {
+    if (!me || me.role !== 'admin') return send(403, { error: '需要管理員權限' });
+    const uid = Number(p.split('/')[4]);
+    await auth.deleteUser(uid);
+    return send(200, { ok: true });
+  }
+
+  // ---------- 名單 ----------
     if (p === '/api/players' && req.method === 'GET')
       return send(200, await listPlayers());
     if (p.startsWith('/api/players/') && req.method === 'GET' && /^\/api\/players\/\d+$/.test(p)) {
@@ -76,11 +127,20 @@ export async function handleRequest(req, res) {
     // ---------- 賽事 ----------
     if (p === '/api/events' && req.method === 'POST') {
       const b = await j();
-      const id = await createEvent(b.name, b.ruleConfig || {});
+      const vis = b.ruleConfig?.visibility || 'public';
+      if (vis === 'private' && !me) return send(401, { error: '私享賽需先登入才能建立' });
+      const ruleConfig = { ...(b.ruleConfig || {}), visibility: vis, owner_id: vis === 'private' ? (me?.id ?? null) : null };
+      const id = await createEvent(b.name, ruleConfig);
       return send(201, { id });
     }
-    if (p === '/api/events' && req.method === 'GET')
-      return send(200, await listEvents());
+    if (p === '/api/events' && req.method === 'GET') {
+      const all = await listEvents();
+      // 未登入只看公開賽; 登入者看公開 + 自己私享; admin 看全部
+      const filtered = (me && me.role === 'admin')
+        ? all
+        : all.filter(e => e.visibility === 'public' || (me && e.owner_id === me.id));
+      return send(200, filtered);
+    }
     if (p.startsWith('/api/events/') && p.endsWith('/detail') && req.method === 'GET') {
       const id = Number(p.split('/')[3]);
       return send(200, await getEvent(id));
@@ -144,6 +204,7 @@ export async function handleRequest(req, res) {
     if (p === '/api/events/self-register' && req.method === 'POST') {
       const b = await j();
       const ev = await getEvent(b.eventId);
+      if (ev?.visibility === 'private' && !me) return send(401, { error: '私享賽需先登入才能報名' });
       if (ev?.status === 'started' || ev?.status === 'closed') {
         return send(403, { error: '比賽已經開始，無法報名' });
       }
@@ -248,9 +309,14 @@ function readBody(req) {
 
 // 本地開發時啟動 listen; Vercel 不透過這條路徑 (VERCEL env 設了就不 listen)
 if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+  auth.ensureSeedAdmin().catch(() => {});
   const server = http.createServer(handleRequest);
   server.listen(PORT, () => console.log(`gdmarch server on http://localhost:${PORT}`));
 }
 
-// Vercel function 入口
-export default handleRequest;
+// Vercel: 第一次請求時確保種子 admin 存在 (幂等)
+let _seeded = false;
+export default async function handleRequestWithSeed(req, res) {
+  if (!_seeded) { _seeded = true; await auth.ensureSeedAdmin().catch(() => {}); }
+  return handleRequest(req, res);
+}

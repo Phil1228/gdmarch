@@ -17,7 +17,27 @@ CREATE TABLE IF NOT EXISTS events (
   name TEXT NOT NULL,
   rule_config TEXT DEFAULT '{}',
   status TEXT DEFAULT 'open',
+  visibility TEXT DEFAULT 'public',
+  owner_id INTEGER,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 用戶
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  display_name TEXT,
+  role TEXT DEFAULT 'user',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 登入 session
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  expires_at TEXT
 );
 
 -- 報名
@@ -54,8 +74,8 @@ CREATE TABLE IF NOT EXISTS matches (
   score_b INTEGER,
   points_a INTEGER,
   points_b INTEGER,
-  level_a TEXT,            -- 紅隊本局打到的級 (2,3,...,J,Q,K,A1,A2,FIN)
-  level_b TEXT,            -- 藍隊本局打到的級
+  level_a TEXT,
+  level_b TEXT,
   recorded_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (event_id) REFERENCES events(id),
   FOREIGN KEY (team_a) REFERENCES teams(id),

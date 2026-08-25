@@ -77,16 +77,26 @@
     msgEl.textContent = '無效的報名連結';
   } else {
     msgEl.className = 'msg'; msgEl.textContent = '載入中…';
-    // 先查狀態再決定是否顯示表單, 避免閃現
-    fetch('/api/events/' + evId + '/detail').then(r => r.json()).then(ev => {
+    // 先查狀態 + 登入態, 決定是否顯示表單 (避免閃現)
+    Promise.all([
+      fetch('/api/events/' + evId + '/detail').then(r => r.json()),
+      fetch('/api/auth/me').then(r => r.json()).catch(()=>({})),
+    ]).then(([ev, me]) => {
       if (ev && (ev.status === 'started' || ev.status === 'closed')) {
         msgEl.className = 'msg err';
         msgEl.textContent = '比賽已經開始，無法報名';
         fEl.style.display = 'none';
-      } else {
-        msgEl.textContent = '';
-        fEl.style.display = 'block';
+        return;
       }
+      if (ev && ev.visibility === 'private' && !me.user) {
+        // 私享賽需登入
+        msgEl.className = 'msg err';
+        msgEl.innerHTML = '這是私享賽，請先 <a href="/login" style="color:var(--red);font-weight:700">登入</a> 才能報名';
+        fEl.style.display = 'none';
+        return;
+      }
+      msgEl.textContent = '';
+      fEl.style.display = 'block';
     }).catch(() => { fEl.style.display = 'block'; });
   }
   document.getElementById('f').addEventListener('submit', async (e) => {

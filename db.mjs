@@ -24,6 +24,10 @@ async function ensureSchema() {
   catch { /* 已存在則忽略 */ }
   try { await client.execute("ALTER TABLE teams ADD COLUMN name TEXT"); }
   catch { /* 已存在則忽略 */ }
+  try { await client.execute("ALTER TABLE events ADD COLUMN visibility TEXT DEFAULT 'public'"); }
+  catch { /* 已存在則忽略 */ }
+  try { await client.execute("ALTER TABLE events ADD COLUMN owner_id INTEGER"); }
+  catch { /* 已存在則忽略 */ }
 }
 const client = new Proxy({}, {
   get(_t, prop) {
@@ -82,8 +86,8 @@ export async function createEvent(name, ruleConfig = {}) {
     }
   }
   const r = await client.execute({
-    sql: 'INSERT INTO events (name, rule_config, status) VALUES (?, ?, ?)',
-    args: [name, JSON.stringify(ruleConfig), 'open'],
+    sql: 'INSERT INTO events (name, rule_config, status, visibility, owner_id) VALUES (?, ?, ?, ?, ?)',
+    args: [name, JSON.stringify(ruleConfig), 'open', ruleConfig?.visibility || 'public', ruleConfig?.owner_id ?? null],
   });
   return Number(r.lastInsertRowid);
 }
@@ -93,11 +97,13 @@ export async function setEventStatus(id, status) {
 export async function getEvent(id) {
   const r = await client.execute({ sql: 'SELECT * FROM events WHERE id = ?', args: [id] });
   const e = r.rows[0];
-  if (e) e.rule = JSON.parse(e.rule_config);
+  if (e) { e.rule = JSON.parse(e.rule_config); e.visibility = e.visibility || 'public'; }
   return e;
 }
 export async function listEvents() {
-  return (await client.execute('SELECT * FROM events ORDER BY id')).rows;
+  const rows = (await client.execute('SELECT * FROM events ORDER BY id')).rows;
+  for (const e of rows) e.visibility = e.visibility || 'public';
+  return rows;
 }
 
 // ---------- registrations (報名) ----------

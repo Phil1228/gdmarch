@@ -62,7 +62,10 @@
 <body>
 <div class="top">
   <div class="logo">掼<span>蛋</span> 賽務後台</div>
-  <a class="home" href="/">← 返回首頁</a>
+  <div style="display:flex;gap:12px;align-items:center">
+    <span id="me-box" style="font-size:13px;opacity:.9"></span>
+    <a class="home" href="/">← 返回首頁</a>
+  </div>
 </div>
 <div class="wrap">
 
@@ -94,6 +97,14 @@
             <option value="rounds">局數制（打完固定局數結算）</option>
             <option value="time">計時制（時間到結算，可平手）</option>
             <option value="untilA">打過A為止（必分勝負）</option>
+          </select>
+        </div>
+      </div>
+      <div class="row mt">
+        <div><label>比賽模式</label>
+          <select id="ev-visibility">
+            <option value="public">公開賽（任何人可報名）</option>
+            <option value="private">私享賽（需登入才能報名）</option>
           </select>
         </div>
       </div>
@@ -186,6 +197,21 @@
 const api = (path, opt) => fetch(path, opt).then(r => r.json().catch(()=>({})));
 const $ = (id) => document.getElementById(id);
 
+// 登入態
+async function loadMe() {
+  try {
+    const d = await (await fetch('/api/auth/me')).json();
+    const box = $('me-box');
+    if (d.user) {
+      box.innerHTML = `👤 ${d.user.displayName||d.user.username}${d.user.role==='admin'?'（管理員）':''} · <a href="#" onclick="logout()" style="color:#fff;opacity:.85">登出</a>`;
+    } else {
+      box.innerHTML = `<a href="/login" style="color:#fff;opacity:.9">登入</a>`;
+    }
+  } catch { $('me-box').textContent=''; }
+}
+window.logout = async () => { await fetch('/api/auth/logout',{method:'POST'}); location.href='/'; };
+loadMe();
+
 // tab 切換
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -264,12 +290,15 @@ $('btn-create').onclick = async () => {
     rounds,
     round_rule: $('ev-rule').value,
     settlement: 'points',
+    visibility: $('ev-visibility').value,
   };
   const d = await api('/api/events', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, ruleConfig }) });
   if (d.id) {
-    $('ev-msg').className='msg ok'; $('ev-msg').textContent = `已建立（ID ${d.id}）`;
+    $('ev-msg').className='msg ok'; $('ev-msg').textContent = `已建立（ID ${d.id}）` + (ruleConfig.visibility==='private'?'：私享賽，需登入報名':'');
     $('ev-name').value='週末友誼賽'; loadEvents();
-  } else { $('ev-msg').className='msg err'; $('ev-msg').textContent = '失敗：' + (d.error||''); }
+  } else if (d.error) {
+    $('ev-msg').className='msg err'; $('ev-msg').textContent = '失敗：' + d.error;
+  }
 };
 async function genLink(id) {
   const ev = await api('/api/events/' + id + '/detail');
