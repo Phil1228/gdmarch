@@ -248,6 +248,8 @@ export async function handleRequest(req, res) {
     // 一鍵生成所有輪次對陣
     if (p.startsWith('/api/events/') && p.endsWith('/build-all') && req.method === 'POST') {
       const eventId = Number(p.split('/')[3]);
+      const ev = await getEvent(eventId);
+      if (ev?.status === 'closed') return send(403, { error: '比賽已結束，不可生成或重置對陣' });
       const r = await buildAllRounds(eventId);
       return send(201, r);
     }

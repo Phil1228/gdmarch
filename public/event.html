@@ -239,9 +239,10 @@ async function renderStatus(ev) {
   el.textContent = ST_MAP[st] || st;
   // 按鈕文案隨狀態變
   const btn = $('btn-start');
-  if (st === 'open') { btn.style.display=''; btn.textContent='開始比賽'; }
-  else if (st === 'started') { btn.style.display=''; btn.textContent='結束比賽'; }
-  else { btn.style.display='none'; }
+  const bb = $('btn-build'); const br = $('btn-refresh');
+  if (st === 'open') { btn.style.display=''; btn.textContent='開始比賽'; bb.disabled=false; br.disabled=false; bb.style.opacity=br.style.opacity=1; }
+  else if (st === 'started') { btn.style.display=''; btn.textContent='結束比賽'; bb.disabled=false; br.disabled=false; bb.style.opacity=br.style.opacity=1; }
+  else { btn.style.display='none'; bb.disabled=true; br.disabled=true; bb.style.opacity=br.style.opacity=.5; }
 }
 async function loadInfo() {
   const ev = await api('/api/events/' + EID + '/detail');
@@ -425,6 +426,7 @@ async function loadMatches() {
 }
 $('btn-build').onclick = async () => {
   const ev = await api('/api/events/' + EID + '/detail');
+  if (ev?.status === 'closed') { $('sc-msg').className='msg err'; $('sc-msg').textContent='比賽已結束，不可生成或重置對陣'; return; }
   const mode = ev?.rule?.scoring_mode || 'individual';
   const rounds = ev?.rule?.rounds || 1;
   try {
