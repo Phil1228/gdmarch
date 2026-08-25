@@ -22,6 +22,8 @@ async function ensureSchema() {
   }
   try { await client.execute("ALTER TABLE events ADD COLUMN status TEXT DEFAULT 'open'"); }
   catch { /* 已存在則忽略 */ }
+  try { await client.execute("ALTER TABLE teams ADD COLUMN name TEXT"); }
+  catch { /* 已存在則忽略 */ }
 }
 const client = new Proxy({}, {
   get(_t, prop) {
@@ -45,12 +47,20 @@ async function nextBadge() {
   throw new Error('badge pool exhausted');
 }
 export async function addPlayer(name, contact = null, note = null, source = 'manual') {
+  // 去重: 同名 (不分來源) 視為同一選手, 回傳現有 id/badge 不再新建
+  const ex = (await client.execute({ sql: 'SELECT id, badge_no FROM players WHERE name = ?', args: [name] })).rows[0];
+  if (ex) return { id: ex.id, badge: ex.badge_no };
   const badge = await nextBadge();
   const r = await client.execute({
     sql: 'INSERT INTO players (name, badge_no, contact, note, source) VALUES (?, ?, ?, ?, ?)',
     args: [name, badge, contact, note, source],
   });
   return { id: Number(r.lastInsertRowid), badge };
+}
+export async function searchPlayers(q) {
+  if (!q || !q.trim()) return [];
+  const rows = (await client.execute({ sql: 'SELECT id, name, badge_no, contact FROM players WHERE name LIKE ? ORDER BY badge_no LIMIT 20', args: ['%' + q.trim() + '%'] })).rows;
+  return rows;
 }
 export async function listPlayers() {
   return (await client.execute('SELECT * FROM players ORDER BY badge_no')).rows;
@@ -119,10 +129,14 @@ export async function registeredPlayerIds(eventId) {
 }
 
 // ---------- teams ----------
-export async function createTeam(eventId, memberIds, roundNo = null) {
+export async function createTeam(eventId, memberIds, roundNo = null, name = null) {
+  if (!name) {
+    const n = (await client.execute({ sql: 'SELECT COUNT(*) AS c FROM teams WHERE event_id = ?', args: [eventId] })).rows[0].c;
+    name = '第 ' + (n + 1) + ' 隊';
+  }
   const r = await client.execute({
-    sql: 'INSERT INTO teams (event_id, round_no, member_ids) VALUES (?, ?, ?)',
-    args: [eventId, roundNo, JSON.stringify(memberIds)],
+    sql: 'INSERT INTO teams (event_id, round_no, member_ids, name) VALUES (?, ?, ?, ?)',
+    args: [eventId, roundNo, JSON.stringify(memberIds), name],
   });
   return Number(r.lastInsertRowid);
 }
@@ -144,6 +158,7 @@ export async function listTeams(eventId, roundNo = null) {
   for (const p of players) pmap[p.id] = p;
   return teams.map((t) => ({
     ...t,
+    name: t.name || ('第 ' + (t.id) + ' 隊'),
     members: JSON.parse(t.member_ids).map((mid) => ({
       id: mid,
       name: pmap[mid]?.name || '?',

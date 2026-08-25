@@ -164,11 +164,20 @@ export async function standings(eventId) {
     acc[m.team_b] = (acc[m.team_b] ?? 0) + (m.points_b ?? 0);
   }
   if (mode === 'team') {
-    // 回傳 team 資訊
+    // 回傳 team 資訊 (含成員名字, 與 listTeams 格式一致)
     const teams = (await client.execute({
-      sql: 'SELECT id, member_ids FROM teams WHERE event_id = ?', args: [eventId],
+      sql: 'SELECT id, name, member_ids FROM teams WHERE event_id = ?', args: [eventId],
     })).rows;
-    return teams.map((t) => ({ team_id: t.id, members: JSON.parse(t.member_ids), points: acc[t.id] ?? 0 }));
+    const pmap = await playersMap();
+    return teams.map((t) => {
+      const ids = JSON.parse(t.member_ids);
+      return {
+        team_id: t.id,
+        name: t.name || ('第 ' + t.id + ' 隊'),
+        members: ids.map((mid) => ({ id: mid, name: pmap[mid]?.name || '?', badge: pmap[mid]?.badge_no || '' })),
+        points: acc[t.id] ?? 0,
+      };
+    }).sort((a, b) => b.points - a.points);
   }
   // individual: 把 team 分攤到其成員, 回傳帶名字的陣列
   const teams = (await client.execute({

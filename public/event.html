@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='15' fill='%23c8102e'/><text x='16' y='22' font-size='18' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>掼</text></svg>">
 <title>比賽管理</title>
 <style>
   :root{ --red:#c8102e; --gold:#d4af37; --ink:#1a1a1a; --line:#eee; }
@@ -49,8 +50,13 @@
   .rank{ display:flex; align-items:center; gap:12px; padding:10px; border-bottom:1px solid var(--line); }
   .rank .pos{ font-size:18px; font-weight:800; width:34px; color:var(--red); }
   .rank .nm{ font-weight:600; }
+  .rank .tn{ font-weight:700; }
+  .rank .tm{ font-size:12px; color:#777; margin-top:2px; }
   .rank .pt{ margin-left:auto; font-weight:800; color:var(--gold); }
   .bye{ color:#b8821a; font-size:13px; margin-top:6px; }
+  .search-box{ margin-top:14px; padding-top:14px; border-top:1px dashed #eee; }
+  .results{ margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+  .res-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; background:#fafafa; border:1px solid #eee; border-radius:8px; }
   .badge-box{ background:#fff8e8; border:2px dashed var(--gold); border-radius:12px; padding:14px; text-align:center; margin-top:10px; }
   .badge-box .n{ font-size:30px; font-weight:800; color:var(--red); letter-spacing:2px; }
   .link-box{ background:#f0f7ff; border:1px solid #cfe3ff; border-radius:9px; padding:10px; font-size:13px; word-break:break-all; margin-top:8px; }
@@ -115,6 +121,14 @@
         <div style="flex:0"><button id="btn-add">加入</button></div>
       </div>
       <div class="msg" id="p-msg"></div>
+      <div class="search-box">
+        <label>從選手庫搜尋加入</label>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:1"><input id="p-search" placeholder="輸入姓名關鍵字搜尋全站選手庫"></div>
+          <div style="flex:0"><button class="sm" id="btn-search">搜尋</button></div>
+        </div>
+        <div id="p-results" class="results"></div>
+      </div>
     </div>
     <div class="card">
       <h3>批量導入（CSV / 每行：姓名,手機,備註）</h3>
@@ -254,11 +268,29 @@ async function delPlayer(pid) {
   await api('/api/events/' + EID + '/players/' + pid, { method:'DELETE' });
   loadRoster();
 }
+// 選手庫搜尋加入
+$('btn-search').onclick = async () => {
+  const q = $('p-search').value.trim();
+  if (!q) { $('p-results').innerHTML = '<span class="muted">請輸入關鍵字</span>'; return; }
+  const res = await api('/api/players/search?q=' + encodeURIComponent(q));
+  if (!res.length) { $('p-results').innerHTML = '<span class="muted">選手庫中無相符選手</span>'; return; }
+  $('p-results').innerHTML = res.map(p => `<div class="res-row">
+    <span>${p.name} <span class="muted">#${p.badge_no}${p.contact?' · '+p.contact:''}</span></span>
+    <button class="sm" onclick="addFromLib(${p.id}, this)">加入本場</button>
+  </div>`).join('');
+};
+window.addFromLib = async (pid, btn) => {
+  const info = await api('/api/players/' + pid);
+  const d = await api('/api/events/' + EID + '/players', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name: info.name }) });
+  if (d.id) { btn.textContent='已加入'; btn.disabled=true; loadRoster(); }
+};
 
 // 分組記分
 const LEVELS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A1','A2','FIN'];
 let CUR_ROUND = 1, TOTAL_ROUNDS = 1;
 let TEAM_MAP = {};
+let TM_NAME = {};
 function renderRoundButtons() {
   const box = $('round-btns');
   if (TOTAL_ROUNDS < 1) { box.innerHTML = ''; return; }
@@ -272,13 +304,14 @@ window.selRound = (r) => { CUR_ROUND = r; renderRoundButtons(); loadMatches(); }
 async function loadMatches() {
   const ev = await api('/api/events/' + EID + '/detail');
   const mode = ev?.rule?.scoring_mode || 'individual';
+  const evStatus = ev?.status || 'open';
   TOTAL_ROUNDS = ev?.rule?.rounds || 1;
   renderRoundButtons();
   const roundNo = CUR_ROUND;
   const teamsUrl = mode === 'team' ? ('/api/events/' + EID + '/teams') : ('/api/events/' + EID + '/teams?round=' + roundNo);
   const teams = await api(teamsUrl);
   TEAM_MAP = {};
-  (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members; }); // 存成員陣列 [{id,name,badge}]
+  (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members; TM_NAME[t.id] = t.name; }); // 存成員陣列 [{id,name,badge}] + 隊名
   const ms = await api('/api/events/' + EID + '/matches?round=' + roundNo);
   const box = $('sc-matches');
   if (!Array.isArray(ms) || !ms.length) { box.innerHTML = '<span class="muted">本輪尚無對陣，請點「生成所有輪次對陣」</span>'; return; }
@@ -299,12 +332,36 @@ async function loadMatches() {
   };
   // 本輪分隊列表
   const rtBox = $('round-teams');
-  const allTeams = Object.values(TEAM_MAP).filter(Boolean);
-  rtBox.innerHTML = allTeams.map((members, i) => {
+  const allTeamEntries = Object.entries(TEAM_MAP).filter(([k,v]) => v);
+  rtBox.innerHTML = allTeamEntries.map(([tid, members], i) => {
     const side = (i % 2 === 0) ? 'A' : 'B';
+    const tname = TM_NAME[tid] || (teamLabel(side) + ' ' + (i+1));
     const mm = members.map(m => `<div class="m">${m.name}<span class="bd">#${m.badge||'?'}</span></div>`).join('');
-    return `<div class="rt-team ${side}"><div class="rt-h">${teamLabel(side)} ${i+1}</div>${mm}</div>`;
+    return `<div class="rt-team ${side}"><div class="rt-h">${tname}</div>${mm}</div>`;
   }).join('') || '<span class="muted">尚無分隊</span>';
+  const canScore = evStatus === 'started';
+  if (!canScore) {
+    box.innerHTML = ms.map(m => {
+      const A = TEAM_MAP[m.team_a] || [];
+      const B = TEAM_MAP[m.team_b] || [];
+      const done = resultText(m);
+      const title = `<div class="mtitle">桌 #${m.id}（第 ${m.round_no||roundNo} 輪）</div>`;
+      return `<div class="match" data-id="${m.id}">
+        ${title}
+        <div class="table-wrap">
+          <div class="seat-row">${seatHtml(A[0], 'A', '北')}</div>
+          <div class="seat-row">
+            ${seatHtml(B[0], 'B', '西')}
+            <div class="table-mid">掼蛋</div>
+            ${seatHtml(B[1], 'B', '東')}
+          </div>
+          <div class="seat-row">${seatHtml(A[1], 'A', '南')}</div>
+        </div>
+        ${done}
+      </div>`;
+    }).join('') + '<div class="muted" style="margin-top:10px">比賽狀態為「進行中」才可記分</div>';
+    return;
+  }
   box.innerHTML = ms.map(m => {
     const A = TEAM_MAP[m.team_a] || [];
     const B = TEAM_MAP[m.team_b] || [];
@@ -366,7 +423,13 @@ async function loadStandings() {
   if (!Array.isArray(st) || !st.length) { box.innerHTML = '<span class="muted">尚無積分</span>'; return; }
   const isTeam = st[0] && st[0].team_id !== undefined;
   box.innerHTML = st.map((x, i) => {
-    const nm = isTeam ? (x.members.map(m=>m.name).join(' + ')) : `${x.name} <span class="muted">(${x.badge})</span>`;
+    let nm;
+    if (isTeam) {
+      const members = (x.members || []).map(m => `${m.name} <span class="muted">(#${m.badge||'?'})</span>`).join(' + ');
+      nm = `<div class="tn">${x.name || ('第 ' + (i+1) + ' 隊')}</div><div class="tm">${members}</div>`;
+    } else {
+      nm = `${x.name} <span class="muted">(${x.badge})</span>`;
+    }
     return `<div class="rank"><div class="pos">${i+1}</div><div class="nm">${nm}</div><div class="pt">${x.points} 分</div></div>`;
   }).join('');
 }

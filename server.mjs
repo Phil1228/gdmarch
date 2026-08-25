@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
-  listPlayers, addPlayer, deletePlayer, getPlayer,
+  listPlayers, addPlayer, deletePlayer, getPlayer, searchPlayers,
   createEvent, getEvent, listEvents, setEventStatus,
   registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches,
 } from './db.mjs';
@@ -54,6 +54,15 @@ export async function handleRequest(req, res) {
     // ---------- 名單 ----------
     if (p === '/api/players' && req.method === 'GET')
       return send(200, await listPlayers());
+    if (p.startsWith('/api/players/') && req.method === 'GET' && /^\/api\/players\/\d+$/.test(p)) {
+      const id = Number(p.split('/').pop());
+      return send(200, await getPlayer(id));
+    }
+    // 選手庫搜尋 (q=關鍵字)
+    if (p === '/api/players/search' && req.method === 'GET') {
+      const q = url.searchParams.get('q') || '';
+      return send(200, await searchPlayers(q));
+    }
     if (p === '/api/players' && req.method === 'POST') {
       const b = await j();
       const { id, badge } = await addPlayer(b.name, b.contact, b.note, b.source || 'manual');

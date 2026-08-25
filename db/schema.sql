@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS teams (
   event_id INTEGER NOT NULL,
   round_no INTEGER,
   member_ids TEXT NOT NULL,
+  name TEXT,
   FOREIGN KEY (event_id) REFERENCES events(id)
 );
 
