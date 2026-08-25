@@ -19,7 +19,7 @@
   .list{ display:flex; flex-direction:column; gap:14px; }
   .ev{ background:#fff; border:1px solid #ffe0e0; border-radius:16px; padding:18px 20px;
        box-shadow:0 6px 20px rgba(200,16,46,.08); text-decoration:none; color:inherit;
-       display:block; transition:transform .12s, box-shadow .12s; }
+       display:block; transition:transform .12s, box-shadow .12s; position:relative; }
   .ev:hover{ transform:translateY(-2px); box-shadow:0 10px 26px rgba(200,16,46,.16); }
   .ev .name{ font-size:19px; font-weight:700; color:var(--ink); }
   .ev .meta{ margin-top:8px; font-size:13px; color:#888; display:flex; flex-wrap:wrap; gap:10px; }
@@ -34,7 +34,7 @@
     background:linear-gradient(135deg,var(--red),#a00d24); color:#fff; text-decoration:none;
     box-shadow:0 6px 16px rgba(200,16,46,.18); }
   .admin-bar a:hover{ transform:translateY(-1px); }
-  .ev .go{ float:right; font-size:13px; color:var(--red); font-weight:600; text-decoration:none; }
+  .ev .go{ position:absolute; top:14px; right:18px; font-size:13px; color:var(--red); font-weight:600; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -74,7 +74,7 @@
         const ruleTag = rule ? `<span class="tag rule">${rule}</span>` : '';
         const rounds = c.rounds ? `共 ${c.rounds} 輪` : '';
         return `<a class="ev" href="/r/${ev.id}">
-          <a class="go" href="/events/${ev.id}">管理 ›</a>
+          <span class="go" onclick="event.preventDefault(); location.href='/events/${ev.id}'">管理 ›</span>
           <div class="name">${ev.name}</div>
           <div class="meta">${mode}${ruleTag}<span>${rounds}</span></div>
         </a>`;
