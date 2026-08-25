@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer, searchPlayers,
   createEvent, getEvent, listEvents, setEventStatus,
-  registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches,
+  registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches, renameTeam,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
 
@@ -144,7 +144,7 @@ export async function handleRequest(req, res) {
     if (p === '/api/events/self-register' && req.method === 'POST') {
       const b = await j();
       const ev = await getEvent(b.eventId);
-      if (ev?.status === 'started') {
+      if (ev?.status === 'started' || ev?.status === 'closed') {
         return send(403, { error: '比賽已經開始，無法報名' });
       }
       const { id, badge } = await addPlayer(b.name, b.contact, b.note, 'self');
@@ -190,6 +190,16 @@ export async function handleRequest(req, res) {
       const eventId = Number(p.split('/')[3]);
       const roundNo = url.searchParams.get('round') ? Number(url.searchParams.get('round')) : null;
       return send(200, await listTeams(eventId, roundNo));
+    }
+    // 改隊名 (僅開放報名中可改)
+    if (p.match(/\/api\/events\/\d+\/teams\/\d+\/rename$/) && req.method === 'POST') {
+      const parts = p.split('/');
+      const eventId = Number(parts[3]); const teamId = Number(parts[5]);
+      const ev = await getEvent(eventId);
+      if (ev?.status !== 'open') return send(403, { error: '比賽已開始或已結束，隊名不可再修改' });
+      const b = await j();
+      await renameTeam(teamId, b.name);
+      return send(200, { ok: true });
     }
     if (p.startsWith('/api/events/') && p.endsWith('/matches') && req.method === 'GET') {
       const eventId = Number(p.split('/')[3]);

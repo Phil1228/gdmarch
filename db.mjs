@@ -140,6 +140,11 @@ export async function createTeam(eventId, memberIds, roundNo = null, name = null
   });
   return Number(r.lastInsertRowid);
 }
+
+// 改名 (僅開放報名中可改; 由呼叫方檢查 status)
+export async function renameTeam(teamId, name) {
+  await client.execute({ sql: 'UPDATE teams SET name = ? WHERE id = ?', args: [name, teamId] });
+}
 export async function listMatches(eventId, roundNo = null) {
   const sql = roundNo
     ? 'SELECT * FROM matches WHERE event_id = ? AND round_no = ? ORDER BY id'

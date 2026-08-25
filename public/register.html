@@ -30,6 +30,8 @@
   button:active{ transform:scale(.98); }
   .msg{ margin-top:16px; text-align:center; font-size:14px; min-height:20px; }
   .ok{ color:#1a9e4b; } .err{ color:var(--red); }
+  .back{ display:block; padding:10px 16px 0; font-size:14px; color:var(--red); text-decoration:none; font-weight:600; }
+  .bd #f{ display:none; } /* 預設隱藏, 確認可報名才顯示, 避免閃現表單 */
   .badge{ margin-top:18px; text-align:center; padding:18px; background:#fff8e8;
           border:2px dashed var(--gold); border-radius:12px; display:none; }
   .badge .n{ font-size:40px; font-weight:800; color:var(--red); letter-spacing:3px; }
@@ -39,6 +41,7 @@
 </head>
 <body>
   <div class="card">
+    <a href="/" class="back">‹ 返回首頁</a>
     <div class="hd">
       <div class="logo">掼<span>蛋</span></div>
       <div class="ev" id="evName">比賽報名</div>
@@ -66,20 +69,25 @@
 <script>
   const evId = "__EVENT_ID__";
   const evName = "__EVENT_NAME__";
+  const fEl = document.getElementById('f');
+  const msgEl = document.getElementById('msg');
   if (evName) document.getElementById('evName').textContent = evName;
   if (!evId) {
-    document.getElementById('msg').className = 'msg err';
-    document.getElementById('msg').textContent = '無效的報名連結';
-    document.getElementById('f').style.display = 'none';
+    msgEl.className = 'msg err';
+    msgEl.textContent = '無效的報名連結';
   } else {
-    // 檢查比賽狀態: 已開始則禁止報名
+    msgEl.className = 'msg'; msgEl.textContent = '載入中…';
+    // 先查狀態再決定是否顯示表單, 避免閃現
     fetch('/api/events/' + evId + '/detail').then(r => r.json()).then(ev => {
-      if (ev && ev.status === 'started') {
-        document.getElementById('msg').className = 'msg err';
-        document.getElementById('msg').textContent = '比賽已經開始，無法報名';
-        document.getElementById('f').style.display = 'none';
+      if (ev && (ev.status === 'started' || ev.status === 'closed')) {
+        msgEl.className = 'msg err';
+        msgEl.textContent = '比賽已經開始，無法報名';
+        fEl.style.display = 'none';
+      } else {
+        msgEl.textContent = '';
+        fEl.style.display = 'block';
       }
-    }).catch(() => {});
+    }).catch(() => { fEl.style.display = 'block'; });
   }
   document.getElementById('f').addEventListener('submit', async (e) => {
     e.preventDefault();

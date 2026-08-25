@@ -84,6 +84,8 @@
   .rt-team.B{ border-color:#1565c0; background:#f0f6ff; } .rt-team.B .rt-h{ color:#1565c0; }
   .rt-team .m{ font-size:13px; padding:2px 0; }
   .rt-team .m .bd{ color:#999; font-size:11px; margin-left:4px; }
+  .rt-team .tn-edit{ width:120px; padding:5px 7px; font-size:14px; border:1.5px solid #ddd; border-radius:7px; margin-bottom:4px; }
+  .rt-team .rt-h{ font-size:13px; font-weight:700; margin-bottom:4px; }
 </style>
 </head>
 <body>
@@ -286,8 +288,13 @@ window.addFromLib = async (pid, btn) => {
   if (d.id) { btn.textContent='已加入'; btn.disabled=true; loadRoster(); }
 };
 
-// 分組記分
-const LEVELS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A1','A2','FIN'];
+window.saveTeamName = async (tid) => {
+  const name = document.getElementById('tn-' + tid).value.trim();
+  if (!name) { alert('隊名不可為空'); return; }
+  const d = await api('/api/events/' + EID + '/teams/' + tid + '/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+  if (d.ok) { TM_NAME[tid] = name; loadMatches(); }
+  else alert(d.error || '失敗');
+};
 let CUR_ROUND = 1, TOTAL_ROUNDS = 1;
 let TEAM_MAP = {};
 let TM_NAME = {};
@@ -333,11 +340,15 @@ async function loadMatches() {
   // 本輪分隊列表
   const rtBox = $('round-teams');
   const allTeamEntries = Object.entries(TEAM_MAP).filter(([k,v]) => v);
+  const canEditTeam = evStatus === 'open';
   rtBox.innerHTML = allTeamEntries.map(([tid, members], i) => {
     const side = (i % 2 === 0) ? 'A' : 'B';
     const tname = TM_NAME[tid] || (teamLabel(side) + ' ' + (i+1));
     const mm = members.map(m => `<div class="m">${m.name}<span class="bd">#${m.badge||'?'}</span></div>`).join('');
-    return `<div class="rt-team ${side}"><div class="rt-h">${tname}</div>${mm}</div>`;
+    const nameCtrl = canEditTeam
+      ? `<input class="tn-edit" id="tn-${tid}" value="${tname.replace(/"/g,'&quot;')}"><button class="sm" onclick="saveTeamName(${tid})">存</button>`
+      : `<div class="rt-h">${tname}</div>`;
+    return `<div class="rt-team ${side}">${nameCtrl}${mm}</div>`;
   }).join('') || '<span class="muted">尚無分隊</span>';
   const canScore = evStatus === 'started';
   if (!canScore) {
