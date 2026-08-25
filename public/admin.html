@@ -43,6 +43,8 @@
   .tag{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
   .tag.team{ background:#fde8ec; color:var(--red); }
   .tag.individual{ background:#e8f0fd; color:#2a6bd4; }
+  .tag.private{ background:#efeafe; color:#6a3cc4; }
+  .tag.public{ background:#e8f5e9; color:#1a9e4b; }
   .mt{ margin-top:14px; }
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @media(max-width:560px){ .grid2{ grid-template-columns:1fr; } .top .logo{ font-size:15px; } }
@@ -252,9 +254,10 @@ async function loadEvents() {
   if (!shown.length) { box.innerHTML = '<span class="muted">暫無符合條件的比賽</span>'; return; }
   box.innerHTML = shown.map(ev => {
     const c = (ev.rule_config ? JSON.parse(ev.rule_config) : {});
+    const vis = ev.visibility === 'private' ? '<span class="tag private">私享</span>' : '<span class="tag public">公開</span>';
     return `<div class="ev-row">
       <div><div class="name">${ev.name}</div>
-        <div class="meta">${evTag(c.scoring_mode)} ${ruleText(c.round_rule)} · 共${c.rounds||'?'}輪 · ID ${ev.id}</div></div>
+        <div class="meta">${vis} ${evTag(c.scoring_mode)} ${ruleText(c.round_rule)} · 共${c.rounds||'?'}輪 · ID ${ev.id}</div></div>
       <div style="display:flex;gap:8px">
         <button class="sm" onclick="location.href='/events/${ev.id}'">管理</button>
         <button class="sm ghost" onclick="genLink(${ev.id})">報名連結</button>
