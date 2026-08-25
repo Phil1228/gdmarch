@@ -29,6 +29,12 @@
   .tag.rule{ background:#fff3df; color:#b8821a; }
   .empty{ text-align:center; color:#aaa; font-size:14px; padding:40px 0; }
   .foot{ text-align:center; font-size:12px; color:#bbb; margin-top:34px; }
+  .admin-bar{ display:flex; justify-content:center; margin-top:18px; }
+  .admin-bar a{ display:inline-block; padding:11px 26px; border-radius:12px; font-weight:700; font-size:15px;
+    background:linear-gradient(135deg,var(--red),#a00d24); color:#fff; text-decoration:none;
+    box-shadow:0 6px 16px rgba(200,16,46,.18); }
+  .admin-bar a:hover{ transform:translateY(-1px); }
+  .ev .go{ float:right; font-size:13px; color:var(--red); font-weight:600; text-decoration:none; }
 </style>
 </head>
 <body>
@@ -36,6 +42,9 @@
     <div class="hd">
       <div class="logo">掼<span>蛋</span></div>
       <div class="slogan">珑客 Loong-Click · 線下比賽賽務系統</div>
+    </div>
+    <div class="admin-bar">
+      <a href="/admin">進入管理後台</a>
     </div>
     <div class="sec-title">進行中的比賽</div>
     <div class="list" id="list"><div class="empty">載入中…</div></div>
@@ -65,6 +74,7 @@
         const ruleTag = rule ? `<span class="tag rule">${rule}</span>` : '';
         const rounds = c.rounds ? `共 ${c.rounds} 輪` : '';
         return `<a class="ev" href="/r/${ev.id}">
+          <a class="go" href="/events/${ev.id}">管理 ›</a>
           <div class="name">${ev.name}</div>
           <div class="meta">${mode}${ruleTag}<span>${rounds}</span></div>
         </a>`;
