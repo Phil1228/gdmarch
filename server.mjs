@@ -258,8 +258,11 @@ export async function handleRequest(req, res) {
         const cols = line.split(/[,\t]/).map((s) => s.trim());
         const name = cols[0];
         if (!name) continue;
-        const { id, badge } = await addPlayer(name, cols[1] || null, cols[2] || null, 'import');
-        const teamNo = cols[3] ? Number(cols[3]) : null;
+        // 欄位順序: 姓名, 隊號, 手機, 備註 (隊號放第二列方便只填姓名+隊號)
+        const teamNo = cols[1] ? Number(cols[1]) : null;
+        const contact = cols[2] || null;
+        const note = cols[3] || null;
+        const { id, badge } = await addPlayer(name, contact, note, 'import');
         await registerPlayer(eventId, id, teamNo);
         added.push({ id, badge, name, teamNo });
       }
