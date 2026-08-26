@@ -42,11 +42,33 @@ function roundRobinPairings(ids, round) {
 
 // ---------- 分組 ----------
 // team 模式: 固定 2 人隊 (round_no = NULL), 之後所有輪次用輪轉法產生對陣
+// 支援錄入時手動指定 team_no: 同 team_no 者自動歸為一隊; 未指定者隨機補充分隊
 export async function buildTeams(eventId) {
-  const ids = await registeredPlayerIds(eventId);
-  if (!ids.length) throw new Error('本場尚無報名選手，請先在名單加入');
+  const regs = await registeredPlayerIds(eventId); // [{playerId, teamNo}]
+  if (!regs.length) throw new Error('本場尚無報名選手，請先在名單加入');
+  const grouped = {}; // teamNo -> [pid]
+  const rest = [];
+  for (const r of regs) {
+    if (r.teamNo != null) (grouped[r.teamNo] ||= []).push(r.playerId);
+    else rest.push(r.playerId);
+  }
+  // 檢查手動指定隊是否都恰好 2 人 (否則提示)
+  const badManual = Object.entries(grouped).filter(([, m]) => m.length !== 2);
+  if (badManual.length) {
+    const info = badManual.map(([n, m]) => `隊${n}(${m.length}人)`).join('、');
+    throw new Error(`手動指定隊人數須為 2 人：${info}。未滿請補齊，或留空由系統自動分隊。`);
+  }
   const teamIds = [];
-  for (const m of chunk(shuffle(ids), 2)) teamIds.push(await createTeam(eventId, m, null));
+  let autoNo = (Object.keys(grouped).map(Number).sort((a, b) => b - a)[0] || 0) + 1;
+  // 先建手動隊 (依 teamNo 升序, 名稱保留指定號)
+  for (const no of Object.keys(grouped).map(Number).sort((a, b) => a - b)) {
+    teamIds.push(await createTeam(eventId, grouped[no], null, `第 ${no} 隊`));
+  }
+  // 剩餘未指定者隨機兩兩成隊
+  for (const m of chunk(shuffle(rest), 2)) {
+    teamIds.push(await createTeam(eventId, m, null, `第 ${autoNo} 隊`));
+    autoNo++;
+  }
   return teamIds;
 }
 

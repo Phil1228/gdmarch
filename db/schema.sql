@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   event_id INTEGER NOT NULL,
   player_id INTEGER NOT NULL,
   status TEXT DEFAULT 'registered',
+  team_no INTEGER,
   registered_at TEXT DEFAULT (datetime('now')),
   UNIQUE(event_id, player_id),
   FOREIGN KEY (event_id) REFERENCES events(id),

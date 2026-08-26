@@ -129,6 +129,7 @@
         <div><label>姓名（必填）</label><input id="p-name" placeholder="姓名"></div>
         <div><label>手機（選）</label><input id="p-contact" placeholder="手機"></div>
         <div><label>備註（選）</label><input id="p-note" placeholder="備註"></div>
+        <div id="tn-field" style="display:none"><label>隊號（選，按隊賽必填）</label><input id="p-team" type="number" min="1" placeholder="如 1"></div>
         <div style="flex:0"><button id="btn-add">加入</button></div>
       </div>
       <div class="msg" id="p-msg"></div>
@@ -142,15 +143,15 @@
       </div>
     </div>
     <div class="card">
-      <h3>批量導入（CSV / 每行：姓名,手機,備註）</h3>
-      <textarea id="csv" rows="5" placeholder="小明,8521111,&#10;小華,8522222,&#10;小美,,"></textarea>
+      <h3>批量導入（CSV / 每行：姓名,手機,備註,隊號）</h3>
+      <textarea id="csv" rows="5" placeholder="小明,8521111,,1&#10;小華,8522222,,1&#10;小美,,,2&#10;小強,,,2"></textarea>
       <button class="mt" id="btn-import">匯入並報名本場</button>
       <div class="msg" id="csv-msg"></div>
     </div>
     <div class="card">
       <h3>本場報名名單</h3>
       <table>
-        <thead><tr><th>號牌</th><th>姓名</th><th>手機</th><th>備註</th><th>來源</th><th></th></tr></thead>
+        <thead><tr><th>號牌</th><th>姓名</th><th>手機</th><th>備註</th><th>隊號</th><th>來源</th><th></th></tr></thead>
         <tbody id="p-list"></tbody>
       </table>
     </div>
@@ -251,6 +252,10 @@ async function loadInfo() {
   const mode = c.scoring_mode === 'team' ? '按隊' : '按個人';
   const rule = ({ time:'計時制', rounds:'局數制', untilA:'打過A為止' }[c.round_rule] || '');
   $('ev-title').textContent = `${ev.name} · ${mode} · 共${c.rounds||'?'}輪 · ${rule}`;
+  window.EVMODE = c.scoring_mode || 'individual';
+  // 按隊賽才顯示隊號輸入
+  const tnField = document.getElementById('tn-field');
+  if (tnField) tnField.style.display = (window.EVMODE === 'team') ? '' : 'none';
   renderStatus(ev);
 }
 $('btn-start').onclick = async () => {
@@ -265,9 +270,10 @@ $('btn-start').onclick = async () => {
 async function loadRoster() {
   const rows = await api('/api/events/' + EID + '/registrations');
   const tb = $('p-list');
-  if (!Array.isArray(rows) || !rows.length) { tb.innerHTML = '<tr><td colspan="6" class="muted">尚無報名</td></tr>'; return; }
+  if (!Array.isArray(rows) || !rows.length) { tb.innerHTML = '<tr><td colspan="7" class="muted">尚無報名</td></tr>'; return; }
   tb.innerHTML = rows.map(r => `<tr>
     <td>${r.badge_no||''}</td><td>${r.name}</td><td>${r.contact||''}</td><td>${r.note||''}</td>
+    <td>${r.team_no != null ? r.team_no : (window.EVMODE==='team' ? '<span class="muted">未指定</span>' : '—')}</td>
     <td>${r.status||''}</td>
     <td><button class="sm ghost" onclick="delPlayer(${r.player_id})">移除</button></td>
   </tr>`).join('');
@@ -275,10 +281,13 @@ async function loadRoster() {
 $('btn-add').onclick = async () => {
   const name = $('p-name').value.trim();
   if (!name) { $('p-msg').className='msg err'; $('p-msg').textContent='請填姓名'; return; }
+  const teamNo = ($('p-team').value || '').trim();
+  const body = { name, contact:$('p-contact').value.trim()||null, note:$('p-note').value.trim()||null };
+  if (teamNo) body.teamNo = Number(teamNo);
   const d = await api('/api/events/' + EID + '/players', { method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ name, contact:$('p-contact').value.trim()||null, note:$('p-note').value.trim()||null }) });
+    body: JSON.stringify(body) });
   if (d.id) { $('p-msg').className='msg ok'; $('p-msg').textContent=`已加入，號牌 ${d.badge}`;
-    $('p-name').value=''; $('p-contact').value=''; $('p-note').value=''; loadRoster(); }
+    $('p-name').value=''; $('p-contact').value=''; $('p-note').value=''; $('p-team').value=''; loadRoster(); }
   else { $('p-msg').className='msg err'; $('p-msg').textContent='失敗：'+(d.error||''); }
 };
 $('btn-import').onclick = async () => {
@@ -307,8 +316,11 @@ $('btn-search').onclick = async () => {
 };
 window.addFromLib = async (pid, btn) => {
   const info = await api('/api/players/' + pid);
+  const teamNo = ($('p-team').value || '').trim();
+  const body = { name: info.name };
+  if (teamNo) body.teamNo = Number(teamNo);
   const d = await api('/api/events/' + EID + '/players', { method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ name: info.name }) });
+    body: JSON.stringify(body) });
   if (d.id) { btn.textContent='已加入'; btn.disabled=true; loadRoster(); }
 };
 

@@ -28,6 +28,8 @@ async function ensureSchema() {
   catch { /* 已存在則忽略 */ }
   try { await client.execute("ALTER TABLE events ADD COLUMN owner_id INTEGER"); }
   catch { /* 已存在則忽略 */ }
+  try { await client.execute("ALTER TABLE registrations ADD COLUMN team_no INTEGER"); }
+  catch { /* 已存在則忽略 */ }
   // 用戶系統表 (與共用 DB 中其他 app 的 users 表區隔, 用 gd_ 前綴)
   await client.execute("CREATE TABLE IF NOT EXISTS gd_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT, role TEXT DEFAULT 'user', created_at TEXT DEFAULT (datetime('now')))");
   await client.execute("CREATE TABLE IF NOT EXISTS gd_sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT)");
@@ -110,11 +112,12 @@ export async function listEvents() {
 }
 
 // ---------- registrations (報名) ----------
-export async function registerPlayer(eventId, playerId) {
+export async function registerPlayer(eventId, playerId, teamNo = null) {
   await client.execute({
-    sql: 'INSERT OR IGNORE INTO registrations (event_id, player_id) VALUES (?, ?)',
-    args: [eventId, playerId],
+    sql: 'INSERT OR IGNORE INTO registrations (event_id, player_id, team_no) VALUES (?, ?, ?)',
+    args: [eventId, playerId, teamNo ?? null],
   });
+  return { eventId, playerId, teamNo: teamNo ?? null };
 }
 export async function removeRegistration(eventId, playerId) {
   await client.execute({
@@ -124,17 +127,17 @@ export async function removeRegistration(eventId, playerId) {
 }
 export async function listRegistrations(eventId) {
   return (await client.execute({
-    sql: `SELECT r.id, r.player_id, p.name, p.badge_no, p.contact, r.status
+    sql: `SELECT r.id, r.player_id, p.name, p.badge_no, p.contact, r.status, r.team_no
           FROM registrations r JOIN players p ON p.id = r.player_id
-          WHERE r.event_id = ? ORDER BY p.badge_no`,
+          WHERE r.event_id = ? ORDER BY r.team_no, p.badge_no`,
     args: [eventId],
   })).rows;
 }
 export async function registeredPlayerIds(eventId) {
   const rows = (await client.execute({
-    sql: 'SELECT player_id FROM registrations WHERE event_id = ?', args: [eventId],
+    sql: 'SELECT player_id, team_no FROM registrations WHERE event_id = ?', args: [eventId],
   })).rows;
-  return rows.map((r) => r.player_id);
+  return rows.map((r) => ({ playerId: r.player_id, teamNo: r.team_no ?? null }));
 }
 
 // ---------- teams ----------

@@ -227,7 +227,7 @@ export async function handleRequest(req, res) {
     // ---------- 報名 ----------
     if (p === '/api/registrations' && req.method === 'POST') {
       const b = await j();
-      await registerPlayer(b.eventId, b.playerId);
+      await registerPlayer(b.eventId, b.playerId, b.teamNo ?? null);
       return send(201, { ok: true });
     }
     if (p.startsWith('/api/events/') && p.endsWith('/registrations') && req.method === 'GET') {
@@ -239,7 +239,7 @@ export async function handleRequest(req, res) {
       const eventId = Number(p.split('/')[3]);
       const b = await j();
       const { id, badge } = await addPlayer(b.name, b.contact, b.note, b.source || 'manual');
-      await registerPlayer(eventId, id);
+      await registerPlayer(eventId, id, b.teamNo ?? null);
       return send(201, { id, badge });
     }
     if (p.startsWith('/api/events/') && p.match(/\/players\/\d+$/) && req.method === 'DELETE') {
@@ -255,12 +255,13 @@ export async function handleRequest(req, res) {
       const lines = (b.csv || '').trim().split('\n');
       const added = [];
       for (const line of lines) {
-        const cols = line.split(/[,;\t]/).map((s) => s.trim());
+        const cols = line.split(/[,\t]/).map((s) => s.trim());
         const name = cols[0];
         if (!name) continue;
         const { id, badge } = await addPlayer(name, cols[1] || null, cols[2] || null, 'import');
-        await registerPlayer(eventId, id);
-        added.push({ id, badge, name });
+        const teamNo = cols[3] ? Number(cols[3]) : null;
+        await registerPlayer(eventId, id, teamNo);
+        added.push({ id, badge, name, teamNo });
       }
       return send(201, { added });
     }
