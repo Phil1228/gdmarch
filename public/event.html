@@ -39,6 +39,9 @@
   th{ color:#888; font-weight:600; font-size:12px; }
   .msg{ margin-top:10px; font-size:13px; min-height:16px; }
   .ok{ color:#1a9e4b; } .err{ color:var(--red); } .muted{ color:#999; }
+  .ed{ cursor:pointer; border-bottom:1px dashed #ccc; padding:1px 2px; min-width:24px; display:inline-block; }
+  .ed:hover{ border-bottom-color:var(--red); color:var(--red); }
+  .ed input{ font:inherit; border:1px solid var(--red); border-radius:4px; padding:1px 3px; }
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @media(max-width:560px){ .grid2{ grid-template-columns:1fr; } .top .logo{ font-size:15px; } }
   .match{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
@@ -271,13 +274,47 @@ async function loadRoster() {
   const rows = await api('/api/events/' + EID + '/registrations');
   const tb = $('p-list');
   if (!Array.isArray(rows) || !rows.length) { tb.innerHTML = '<tr><td colspan="7" class="muted">尚無報名</td></tr>'; return; }
-  tb.innerHTML = rows.map(r => `<tr>
-    <td>${r.badge_no||''}</td><td>${r.name}</td><td>${r.contact||''}</td><td>${r.note||''}</td>
-    <td>${r.team_no != null ? r.team_no : (window.EVMODE==='team' ? '<span class="muted">未指定</span>' : '—')}</td>
-    <td>${r.status||''}</td>
-    <td><button class="sm ghost" onclick="delPlayer(${r.player_id})">移除</button></td>
-  </tr>`).join('');
+  const isTeam = window.EVMODE === 'team';
+  tb.innerHTML = rows.map(r => {
+    const teamCell = r.team_no != null
+      ? (isTeam ? `<span class="ed" onclick="editCell(${r.player_id},'teamNo',this)">${r.team_no}</span>` : r.team_no)
+      : (isTeam ? `<span class="ed muted" onclick="editCell(${r.player_id},'teamNo',this)">未指定</span>` : '—');
+    return `<tr>
+      <td>${r.badge_no||''}</td><td>${r.name}</td>
+      <td><span class="ed" onclick="editCell(${r.player_id},'contact',this)">${r.contact||'<span class="muted">編輯</span>'}</span></td>
+      <td><span class="ed" onclick="editCell(${r.player_id},'note',this)">${r.note||'<span class="muted">編輯</span>'}</span></td>
+      <td>${teamCell}</td>
+      <td>${r.status||''}</td>
+      <td><button class="sm ghost" onclick="delPlayer(${r.player_id})">移除</button></td>
+    </tr>`;
+  }).join('');
 }
+// 行內編輯: 點擊儲存格變輸入框, 失焦/Enter 保存, Esc 取消
+window.editCell = (pid, field, el) => {
+  if (el.querySelector('input')) return; // 已在編輯
+  const cur = (field === 'teamNo')
+    ? (el.textContent === '未指定' ? '' : el.textContent)
+    : (el.querySelector('span') ? '' : el.textContent);
+  const input = document.createElement('input');
+  input.value = cur;
+  if (field === 'teamNo') input.type = 'number'; input.min = '1';
+  input.style.width = field === 'teamNo' ? '44px' : '90px';
+  el.innerHTML = ''; el.appendChild(input); input.focus(); input.select();
+  let done = false;
+  const save = async () => {
+    if (done) return; done = true;
+    const val = input.value.trim();
+    const body = {}; body[field] = (field === 'teamNo') ? (val || '') : val;
+    const d = await api('/api/events/' + EID + '/registrations/' + pid, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (d.ok) loadRoster();
+    else { alert(d.error || '儲存失敗'); loadRoster(); }
+  };
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    else if (e.key === 'Escape') { done = true; loadRoster(); }
+  });
+};
 $('btn-add').onclick = async () => {
   const name = $('p-name').value.trim();
   if (!name) { $('p-msg').className='msg err'; $('p-msg').textContent='請填姓名'; return; }

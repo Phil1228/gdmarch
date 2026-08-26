@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer, searchPlayers,
   createEvent, getEvent, listEvents, setEventStatus,
-  registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches, renameTeam,
+  registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches, renameTeam, updateRegistration,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
 import * as auth from './auth.mjs';
@@ -233,6 +233,17 @@ export async function handleRequest(req, res) {
     if (p.startsWith('/api/events/') && p.endsWith('/registrations') && req.method === 'GET') {
       const eventId = Number(p.split('/')[3]);
       return send(200, await listRegistrations(eventId));
+    }
+    if (p.match(/\/api\/events\/\d+\/registrations\/\d+$/) && req.method === 'PATCH') {
+      const parts = p.split('/');
+      const eventId = Number(parts[3]); const playerId = Number(parts[5]);
+      const b = await j();
+      const patch = {};
+      if ('contact' in b) patch.contact = b.contact ?? null;
+      if ('note' in b) patch.note = b.note ?? null;
+      if ('teamNo' in b) patch.teamNo = (b.teamNo === '' || b.teamNo == null) ? null : Number(b.teamNo);
+      await updateRegistration(eventId, playerId, patch);
+      return send(200, { ok: true });
     }
     // ---------- 賽事專屬: 名單 (player 屬於某場比賽) ----------
     if (p.startsWith('/api/events/') && p.endsWith('/players') && req.method === 'POST') {

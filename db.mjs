@@ -106,7 +106,7 @@ export async function getEvent(id) {
   return e;
 }
 export async function listEvents() {
-  const rows = (await client.execute('SELECT * FROM events ORDER BY id')).rows;
+  const rows = (await client.execute('SELECT * FROM events ORDER BY id DESC')).rows;
   for (const e of rows) e.visibility = e.visibility || 'public';
   return rows;
 }
@@ -119,6 +119,25 @@ export async function registerPlayer(eventId, playerId, teamNo = null) {
   });
   return { eventId, playerId, teamNo: teamNo ?? null };
 }
+
+// 更新某場報名紀錄的 手機/備註/隊號 (手機備註存 players 表, 隊號存 registrations)
+export async function updateRegistration(eventId, playerId, { contact, note, teamNo } = {}) {
+  if (contact !== undefined || note !== undefined) {
+    const sets = [];
+    const args = [];
+    if (contact !== undefined) { sets.push('contact = ?'); args.push(contact); }
+    if (note !== undefined) { sets.push('note = ?'); args.push(note); }
+    args.push(playerId);
+    await client.execute({ sql: `UPDATE players SET ${sets.join(', ')} WHERE id = ?`, args });
+  }
+  if (teamNo !== undefined) {
+    await client.execute({
+      sql: 'UPDATE registrations SET team_no = ? WHERE event_id = ? AND player_id = ?',
+      args: [teamNo ?? null, eventId, playerId],
+    });
+  }
+  return { ok: true };
+}
 export async function removeRegistration(eventId, playerId) {
   await client.execute({
     sql: 'DELETE FROM registrations WHERE event_id = ? AND player_id = ?',
@@ -127,7 +146,7 @@ export async function removeRegistration(eventId, playerId) {
 }
 export async function listRegistrations(eventId) {
   return (await client.execute({
-    sql: `SELECT r.id, r.player_id, p.name, p.badge_no, p.contact, r.status, r.team_no
+    sql: `SELECT r.id, r.player_id, p.name, p.badge_no, p.contact, p.note, r.status, r.team_no
           FROM registrations r JOIN players p ON p.id = r.player_id
           WHERE r.event_id = ? ORDER BY r.team_no, p.badge_no`,
     args: [eventId],
