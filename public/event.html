@@ -266,7 +266,7 @@ $('btn-start').onclick = async () => {
   const cur = ev?.status || 'open';
   const next = cur === 'open' ? 'started' : (cur === 'started' ? 'closed' : 'open');
   await api('/api/events/' + EID + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status: next }) });
-  loadInfo();
+  location.reload(); // 強制刷新頁面, 確保狀態/按鈕/tab 完全同步
 };
 
 // 掼蛋級別順序 (與 tournament.mjs 一致)
