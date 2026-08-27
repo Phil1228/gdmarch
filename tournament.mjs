@@ -187,9 +187,12 @@ export async function standings(eventId) {
     args: [eventId],
   })).rows;
   const acc = {}; // teamId -> pts
+  const maxLv = {}; // teamId -> 最高級別索引 (從已記分局即時計算, 兼容歷史數據)
   for (const m of rows) {
     acc[m.team_a] = (acc[m.team_a] ?? 0) + (m.points_a ?? 0);
     acc[m.team_b] = (acc[m.team_b] ?? 0) + (m.points_b ?? 0);
+    if (m.level_a != null) { const i = levelIndex(m.level_a); if (i > (maxLv[m.team_a] ?? -1)) maxLv[m.team_a] = i; }
+    if (m.level_b != null) { const i = levelIndex(m.level_b); if (i > (maxLv[m.team_b] ?? -1)) maxLv[m.team_b] = i; }
   }
   if (mode === 'team') {
     // 回傳 team 資訊 (含成員名字, 與 listTeams 格式一致)
@@ -199,12 +202,14 @@ export async function standings(eventId) {
     const pmap = await playersMap();
     return teams.map((t) => {
       const ids = JSON.parse(t.member_ids);
+      // 級數 = max(teams.level_no 欄位, 從 matches 即時算出的歷史最高級) —— 兼容舊數據
+      const lv = Math.max(t.level_no ?? 0, maxLv[t.id] ?? 0);
       return {
         team_id: t.id,
         name: t.name || ('第 ' + t.id + ' 隊'),
         members: ids.map((mid) => ({ id: mid, name: pmap[mid]?.name || '?', badge: pmap[mid]?.badge_no || '' })),
         points: acc[t.id] ?? 0,
-        level_no: t.level_no ?? 0, // 級數 (升級次數)
+        level_no: lv, // 級數 (升級次數)
       };
     }).sort((a, b) => b.points - a.points || b.level_no - a.level_no);
   }
