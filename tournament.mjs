@@ -168,6 +168,12 @@ export async function recordMatch(matchId, levelA, levelB) {
           WHERE id = ?`,
     args: [winner, levelA, levelB, pa, pb, matchId],
   });
+  // 更新兩隊當前級別 (取歷史最高級別索引 = 級數)
+  const m = (await client.execute({ sql: 'SELECT team_a, team_b FROM matches WHERE id = ?', args: [matchId] })).rows[0];
+  if (m) {
+    if (m.team_a != null) await client.execute({ sql: 'UPDATE teams SET level_no = MAX(level_no, ?) WHERE id = ?', args: [ia, m.team_a] });
+    if (m.team_b != null) await client.execute({ sql: 'UPDATE teams SET level_no = MAX(level_no, ?) WHERE id = ?', args: [ib, m.team_b] });
+  }
   return { winner, points_a: pa, points_b: pb };
 }
 
@@ -188,7 +194,7 @@ export async function standings(eventId) {
   if (mode === 'team') {
     // 回傳 team 資訊 (含成員名字, 與 listTeams 格式一致)
     const teams = (await client.execute({
-      sql: 'SELECT id, name, member_ids FROM teams WHERE event_id = ?', args: [eventId],
+      sql: 'SELECT id, name, member_ids, level_no FROM teams WHERE event_id = ?', args: [eventId],
     })).rows;
     const pmap = await playersMap();
     return teams.map((t) => {
@@ -198,8 +204,9 @@ export async function standings(eventId) {
         name: t.name || ('第 ' + t.id + ' 隊'),
         members: ids.map((mid) => ({ id: mid, name: pmap[mid]?.name || '?', badge: pmap[mid]?.badge_no || '' })),
         points: acc[t.id] ?? 0,
+        level_no: t.level_no ?? 0, // 級數 (升級次數)
       };
-    }).sort((a, b) => b.points - a.points);
+    }).sort((a, b) => b.points - a.points || b.level_no - a.level_no);
   }
   // individual: 把 team 分攤到其成員, 回傳帶名字的陣列
   const teams = (await client.execute({

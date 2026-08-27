@@ -28,8 +28,8 @@ async function ensureSchema() {
   catch { /* 已存在則忽略 */ }
   try { await client.execute("ALTER TABLE events ADD COLUMN owner_id INTEGER"); }
   catch { /* 已存在則忽略 */ }
-  try { await client.execute("ALTER TABLE registrations ADD COLUMN team_no INTEGER"); }
-  catch { /* 已存在則忽略 */ }
+  try { await client.execute("ALTER TABLE registrations ADD COLUMN team_no INTEGER"); } catch { /* 已存在則忽略 */ }
+  try { await client.execute("ALTER TABLE teams ADD COLUMN level_no INTEGER DEFAULT 0"); } catch { /* 已存在則忽略 */ }
   // 用戶系統表 (與共用 DB 中其他 app 的 users 表區隔, 用 gd_ 前綴)
   await client.execute("CREATE TABLE IF NOT EXISTS gd_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT, role TEXT DEFAULT 'user', created_at TEXT DEFAULT (datetime('now')))");
   await client.execute("CREATE TABLE IF NOT EXISTS gd_sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT)");

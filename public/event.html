@@ -517,7 +517,8 @@ async function loadStandings() {
     } else {
       nm = `${x.name} <span class="muted">(${x.badge})</span>`;
     }
-    return `<div class="rank"><div class="pos">${i+1}</div><div class="nm">${nm}</div><div class="pt">${x.points} 分</div></div>`;
+    const lvl = isTeam ? `<div class="pt">${x.level_no ?? 0} 級</div>` : '';
+    return `<div class="rank"><div class="pos">${i+1}</div><div class="nm">${nm}</div><div class="pt">${x.points} 分</div>${lvl}</div>`;
   }).join('');
 }
 

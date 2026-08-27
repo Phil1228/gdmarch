@@ -84,8 +84,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="events">賽事管理</div>
     <div class="tab" data-tab="roster">名單</div>
-    <div class="tab" data-tab="scoring">分組記分</div>
-    <div class="tab" data-tab="standings">積分榜</div>
+    <div class="tab" data-tab="users" id="tab-users-btn" style="display:none">用戶管理</div>
   </div>
 
   <div class="panel active" id="tab-events">
@@ -160,33 +159,15 @@
     </div>
   </div>
 
-  <!-- 分組記分 -->
-  <div class="panel" id="tab-scoring">
+  <!-- 用戶管理 -->
+  <div class="panel" id="tab-users">
     <div class="card">
-      <h3>選擇比賽</h3>
-      <select id="sc-ev"></select>
-      <div class="row mt">
-        <div><label>輪次</label><input id="sc-round" type="number" value="1" min="1"></div>
-        <div style="flex:0"><button id="btn-build">生成本輪對陣</button></div>
-      </div>
-      <div class="msg" id="sc-msg"></div>
-    </div>
-    <div class="card">
-      <h3>本輪對陣</h3>
-      <div id="sc-matches"><span class="muted">尚未生成</span></div>
-    </div>
-  </div>
-
-  <!-- 積分榜 -->
-  <div class="panel" id="tab-standings">
-    <div class="card">
-      <h3>選擇比賽</h3>
-      <select id="st-ev"></select>
-      <button class="mt sm" id="btn-st">查看積分榜</button>
-    </div>
-    <div class="card">
-      <h3>排名</h3>
-      <div id="st-list"><span class="muted">尚未查看</span></div>
+      <h3>用戶管理</h3>
+      <table>
+        <thead><tr><th>ID</th><th>帳號</th><th>顯示名</th><th>角色</th><th>操作</th></tr></thead>
+        <tbody id="u-list"></tbody>
+      </table>
+      <div class="msg" id="u-msg"></div>
     </div>
   </div>
 
@@ -219,6 +200,7 @@ async function loadMe() {
     const box = $('me-box');
     if (d.user) {
       box.innerHTML = `👤 ${d.user.displayName||d.user.username}${d.user.role==='admin'?'（管理員）':''} · <a href="#" onclick="logout()" style="color:#fff;opacity:.85">登出</a>`;
+      if (d.user.role === 'admin') { const ub = $('tab-users-btn'); if (ub) ub.style.display = ''; }
     } else {
       box.innerHTML = `<a href="/login" style="color:#fff;opacity:.9">登入</a>`;
     }
@@ -235,8 +217,7 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   $('tab-' + t.dataset.tab).classList.add('active');
   if (t.dataset.tab === 'events') loadEvents();
   if (t.dataset.tab === 'roster') loadPlayers();
-  if (t.dataset.tab === 'scoring') loadScoringEvents();
-  if (t.dataset.tab === 'standings') loadStandingsEvents();
+  if (t.dataset.tab === 'users') loadUsers();
 });
 
 const evTag = (mode) => mode === 'team'
@@ -377,82 +358,33 @@ async function delPlayer(id) {
   loadPlayers();
 }
 
-// ---- 分組記分 ----
-async function loadScoringEvents() {
-  const evs = await api('/api/events');
-  $('sc-ev').innerHTML = (evs||[]).map(e => `<option value="${e.id}">${e.name} (ID ${e.id})</option>`).join('');
-  if (evs && evs.length) loadMatches();
+// ---- 用戶管理 (admin) ----
+async function loadUsers() {
+  const us = await api('/api/admin/users');
+  const tb = $('u-list');
+  if (!Array.isArray(us) || !us.length) { tb.innerHTML = '<tr><td colspan="5" class="muted">尚無用戶</td></tr>'; return; }
+  tb.innerHTML = us.map(u => `<tr>
+    <td>${u.id}</td><td>${u.username}</td><td>${u.display_name||''}</td>
+    <td>${u.role==='admin'?'<span class="tag private">管理員</span>':'<span class="tag public">一般用戶</span>'}</td>
+    <td style="display:flex;gap:6px">
+      <button class="sm ghost" onclick="resetPw(${u.id})">重設密碼</button>
+      ${u.role==='admin'?'':'<button class="sm ghost" onclick="delUser('+u.id+')">刪除</button>'}
+    </td>
+  </tr>`).join('');
 }
-$('btn-build').onclick = async () => {
-  const evId = $('sc-ev').value;
-  if (!evId) return;
-  const ev = await api('/api/events/' + evId + '/detail');
-  const mode = ev?.rule?.scoring_mode || 'individual';
-  const roundNo = Number($('sc-round').value) || 1;
-  // 先確保有隊：team 模式只在第1輪建固定隊；individual 每輪建
-  if (mode === 'team') {
-    const teams = await api('/api/events/' + evId + '/teams');
-    if (!teams.length) { await api('/api/build-teams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+evId, scoringMode:mode }) }); }
-  } else {
-    await api('/api/build-teams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+evId, scoringMode:mode, roundNo }) });
-  }
-  const tl = await api('/api/events/' + evId + '/teams?round=' + roundNo);
-  const teamIds = (tl||[]).map(t => t.id);
-  if (!teamIds.length) { $('sc-msg').className='msg err'; $('sc-msg').textContent='尚無報名選手或無法分組'; return; }
-  const d = await api('/api/matchups', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ eventId:+evId, roundNo, teamIds }) });
-  $('sc-msg').className='msg ok'; $('sc-msg').textContent = `已生成 ${d.matchups?.length||0} 場對陣` + (d.bye ? '（1人輪空）' : '');
-  loadMatches();
+window.resetPw = async (uid) => {
+  const pw = prompt('輸入新密碼（至少 4 字元）：');
+  if (!pw) return;
+  const d = await api('/api/admin/users/' + uid + '/reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ password: pw }) });
+  $('u-msg').className = d.ok ? 'msg ok' : 'msg err';
+  $('u-msg').textContent = d.ok ? '已重設密碼' : ('失敗：'+(d.error||''));
 };
-// 記住 team 名字映射
-let TEAM_MAP = {};
-async function loadMatches() {
-  const evId = $('sc-ev').value;
-  if (!evId) return;
-  const mode = (await api('/api/events/' + evId + '/detail'))?.rule?.scoring_mode || 'individual';
-  const roundNo = Number($('sc-round').value) || 1;
-  const teams = await api('/api/events/' + evId + '/teams?round=' + roundNo);
-  TEAM_MAP = {};
-  (teams||[]).forEach(t => { TEAM_MAP[t.id] = t.members.map(m => m.name).join(' + '); });
-  const ms = await api('/api/events/' + evId + '/matches?round=' + roundNo);
-  const box = $('sc-matches');
-  if (!Array.isArray(ms) || !ms.length) { box.innerHTML = '<span class="muted">本輪尚無對陣，請點「生成本輪對陣」</span>'; return; }
-  box.innerHTML = ms.map(m => {
-    const a = TEAM_MAP[m.team_a] || ('隊'+m.team_a);
-    const b = TEAM_MAP[m.team_b] || ('隊'+m.team_b);
-    const done = m.winner ? `<span class="bye">已記分：${m.winner==='draw'?'平局':(m.winner+'勝')} (${m.score_a??''}:${m.score_b??''})</span>` : '';
-    return `<div class="match" data-id="${m.id}">
-      <div class="vs"><div class="team">${a}</div><div class="x">VS</div><div class="team">${b}</div></div>
-      <div class="acts">
-        <button onclick="rec(${m.id},'A')">A勝</button>
-        <button onclick="rec(${m.id},'B')">B勝</button>
-        <button class="ghost" onclick="rec(${m.id},'draw')">平局</button>
-      </div>${done}
-    </div>`;
-  }).join('');
-}
-window.rec = async (matchId, winner) => {
-  const d = await api('/api/matches', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ matchId, winner }) });
-  if (d.points_a !== undefined) { $('sc-msg').className='msg ok'; $('sc-msg').textContent='已記分'; loadMatches(); }
-  else { $('sc-msg').className='msg err'; $('sc-msg').textContent='失敗：'+(d.error||''); }
-};
-
-// ---- 積分榜 ----
-async function loadStandingsEvents() {
-  const evs = await api('/api/events');
-  $('st-ev').innerHTML = (evs||[]).map(e => `<option value="${e.id}">${e.name} (ID ${e.id})</option>`).join('');
-}
-$('btn-st').onclick = async () => {
-  const evId = $('st-ev').value;
-  if (!evId) return;
-  const st = await api('/api/events/' + evId + '/standings');
-  const box = $('st-list');
-  if (!Array.isArray(st) || !st.length) { box.innerHTML = '<span class="muted">尚無積分</span>'; return; }
-  // 若是 team 模式，st 為 [{team_id, members, points}]；individual 為 [{player_id,name,badge,points}]
-  const isTeam = st[0] && st[0].team_id !== undefined;
-  box.innerHTML = st.map((x, i) => {
-    const nm = isTeam ? (x.members.map(m=>m.name).join(' + ')) : `${x.name} <span class="muted">(${x.badge})</span>`;
-    return `<div class="rank"><div class="pos">${i+1}</div><div class="nm">${nm}</div><div class="pt">${x.points} 分</div></div>`;
-  }).join('');
+window.delUser = async (uid) => {
+  if (!confirm('確定刪除該用戶？此動作無法復原')) return;
+  const d = await api('/api/admin/users/' + uid, { method:'DELETE' });
+  $('u-msg').className = d.ok ? 'msg ok' : 'msg err';
+  $('u-msg').textContent = d.ok ? '已刪除' : ('失敗：'+(d.error||''));
+  if (d.ok) loadUsers();
 };
 
 // 初始
