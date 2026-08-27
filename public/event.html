@@ -269,6 +269,8 @@ $('btn-start').onclick = async () => {
   loadInfo();
 };
 
+// 掼蛋級別順序 (與 tournament.mjs 一致)
+const LEVELS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A1','A2','FIN'];
 // 名單
 async function loadRoster() {
   const rows = await api('/api/events/' + EID + '/registrations');
