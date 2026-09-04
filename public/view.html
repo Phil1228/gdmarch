@@ -84,7 +84,23 @@
     <div class="round-btns" id="round-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
     <div id="matches-box"><span class="muted">載入中…</span></div>
   </div></div>
-  <div class="panel" id="tab-standings"><div class="card"><div id="standings-box"><span class="muted">載入中…</span></div></div></div>
+  <div class="panel" id="tab-standings"><div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <button class="sm ghost" id="btn-share" onclick="openShare()">🏆 分享領獎台</button>
+    </div>
+    <div id="standings-box"><span class="muted">載入中…</span></div>
+  </div></div>
+<div id="share-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:60; align-items:center; justify-content:center; padding:16px; overflow:auto;">
+  <div style="background:#fff; border-radius:16px; max-width:420px; width:100%; padding:18px; text-align:center; position:relative;">
+    <button onclick="closeShare()" style="position:absolute; top:10px; right:14px; background:none; border:none; font-size:22px; color:#999; cursor:pointer;">×</button>
+    <h3 style="margin-bottom:10px;">🏆 比賽領獎台</h3>
+    <canvas id="share-canvas" width="760" height="1000" style="width:100%; max-width:380px; border-radius:12px; display:block; margin:0 auto; background:#1a1a2e;"></canvas>
+    <div class="row mt" style="gap:8px; justify-content:center; display:flex">
+      <button class="sm" onclick="downloadShare()">下載圖片</button>
+      <button class="sm ghost" onclick="shareWechat()">分享到微信</button>
+    </div>
+    <div class="msg muted" id="share-msg" style="margin-top:8px; font-size:12px"></div>
+  </div>
 </div>
 <script>
 const EID = "__EVENT_ID__";
@@ -161,6 +177,8 @@ let evDetail = null;
 
 async function loadStandings() {
   const st = await api('/api/events/' + EID + '/standings');
+  window.__LAST_ST__ = st;
+  try { const ev = await api('/api/events/' + EID + '/detail'); window.__EV_NAME__ = ev?.name || ''; } catch {}
   const box = $('standings-box');
   if (!Array.isArray(st) || !st.length) { box.innerHTML = '<div class="empty">尚無積分</div>'; return; }
   box.innerHTML = st.map((x, i) => {
@@ -169,6 +187,84 @@ async function loadStandings() {
     return `<div class="rank"><div class="pos">${i+1}</div><div><div class="tn">${nm}</div>${x.members?`<div class="tm">${x.members.map(m=>m.name+' #'+m.badge).join(' · ')}</div>`:''}</div><div class="pt">${pt}</div></div>`;
   }).join('');
 }
+
+// ---- 領獎台分享 ----
+window.openShare = async () => {
+  await loadStandings();
+  const st = window.__LAST_ST__;
+  if (!st || !st.length) { alert('尚無積分'); return; }
+  drawPodium(st);
+  $('share-modal').style.display = 'flex';
+  $('share-msg').textContent = '';
+};
+window.closeShare = () => { $('share-modal').style.display = 'none'; };
+
+function drawPodium(st) {
+  const cv = document.getElementById('share-canvas');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#2b1055'); g.addColorStop(.5,'#7597de'); g.addColorStop(1,'#c8102e');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  const rg = ctx.createRadialGradient(W/2,180,20,W/2,180,360);
+  rg.addColorStop(0,'rgba(255,215,0,.35)'); rg.addColorStop(1,'rgba(255,215,0,0)');
+  ctx.fillStyle = rg; ctx.fillRect(0,0,W,H);
+  ctx.textAlign='center'; ctx.fillStyle='#fff';
+  ctx.font='bold 46px sans-serif'; ctx.fillText('🏆 領 獎 台 🏆', W/2, 90);
+  ctx.font='bold 30px sans-serif'; ctx.fillStyle='#ffd700';
+  ctx.fillText(window.__EV_NAME__ || '比賽排名', W/2, 140);
+  ctx.font='20px sans-serif'; ctx.fillStyle='rgba(255,255,255,.8)';
+  ctx.fillText('前三名榮登領獎台', W/2, 175);
+  const top = st.slice(0,3);
+  const colors = ['#ffd700','#c0c0c0','#cd7f32'];
+  const labels = ['🥇 冠軍','🥈 亞軍','🥉 季軍'];
+  const heights = [380, 300, 230];
+  const baseY = 760;
+  const xs = [200, 380, 560];
+  top.forEach((x, i) => {
+    const cx = xs[i];
+    ctx.fillStyle = colors[i]; ctx.fillRect(cx-85, baseY-heights[i], 170, heights[i]);
+    ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fillRect(cx-85, baseY-heights[i], 170, 16);
+    ctx.fillStyle='#1a1a2e'; ctx.font='bold 30px sans-serif'; ctx.fillText(labels[i], cx, baseY-heights[i]+44);
+    ctx.fillStyle='#1a1a2e'; ctx.font='bold 26px sans-serif';
+    const nm = (x.name || ('第 '+(i+1)+' 隊'));
+    ctx.fillText(nm.slice(0,12), cx, baseY-heights[i]+82);
+    ctx.fillStyle='#333'; ctx.font='18px sans-serif';
+    const members = (x.members||[]).map(m=>m.name).join('、');
+    ctx.fillText(members.slice(0,16) || '—', cx, baseY-heights[i]+112);
+    ctx.fillStyle='#c8102e'; ctx.font='bold 22px sans-serif';
+    const lv = x.level_no!=null ? (' · '+x.level_no+'級') : '';
+    ctx.fillText(x.points+' 分'+lv, cx, baseY-heights[i]+142);
+    ctx.font='54px sans-serif'; ctx.fillText('🏆', cx, baseY-heights[i]-26);
+    ctx.font='40px sans-serif'; ctx.fillText('💐', cx+60, baseY-heights[i]-10);
+  });
+  ctx.fillStyle='rgba(255,255,255,.85)'; ctx.font='20px sans-serif';
+  ctx.fillText('掼蛋賽務 · Loong-Click', W/2, H-40);
+}
+function canvasToBlob(cb) {
+  const cv = document.getElementById('share-canvas');
+  if (cv.toBlob) cv.toBlob(cb, 'image/png');
+  else cb(dataURLToBlob(cv.toDataURL('image/png')));
+}
+function dataURLToBlob(d){ const a=d.split(','); const m=a[0].match(/:(.*);/)[1]; const b=atob(a[1]); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return new Blob([u],{type:m}); }
+window.downloadShare = () => {
+  canvasToBlob(blob => {
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='領獎台.png'; a.click();
+    $('share-msg').textContent='已下載，可轉發微信';
+  });
+};
+window.shareWechat = async () => {
+  canvasToBlob(async blob => {
+    const file = new File([blob], '領獎台.png', {type:'image/png'});
+    if (navigator.canShare && navigator.canShare({files:[file]})) {
+      try { await navigator.share({ files:[file], title:'掼蛋領獎台', text:'比賽排名出爐！' }); } catch {}
+    } else if (navigator.share) {
+      try { await navigator.share({ title:'掼蛋領獎台', text:'比賽排名出爐！', url:location.href }); } catch {}
+    } else {
+      $('share-msg').textContent='此裝置不支援直接分享，請按「下載圖片」後手動轉發微信';
+    }
+  });
+};
 
 loadEvent();
 loadRoster();

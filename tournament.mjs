@@ -105,7 +105,14 @@ export async function buildAllRounds(eventId) {
         });
         out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: a, teamB: b });
       }
-      if (bye != null) out.push({ round: r, bye: bye });
+      if (bye != null) {
+        // 輪空也寫入 matches，前端才能渲染
+        const r2 = await client.execute({
+          sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, NULL)',
+          args: [eventId, r, bye],
+        });
+        out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: bye, teamB: null });
+      }
     }
     return { mode, rounds, matchups: out };
   }
@@ -121,7 +128,15 @@ export async function buildAllRounds(eventId) {
       });
       out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: sh[i], teamB: sh[i + 1] });
     }
-    if (sh.length % 2 === 1) out.push({ round: r, bye: sh[sh.length - 1] });
+    if (sh.length % 2 === 1) {
+      // 輪空寫入 matches
+      const bye = sh[sh.length - 1];
+      const r2 = await client.execute({
+        sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, NULL)',
+        args: [eventId, r, bye],
+      });
+      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: bye, teamB: null });
+    }
   }
   return { mode, rounds, matchups: out };
 }
@@ -217,7 +232,16 @@ export async function standings(eventId) {
   const teams = (await client.execute({
     sql: 'SELECT id, member_ids FROM teams WHERE event_id = ?', args: [eventId],
   })).rows;
-  const pmap = await playersMap();
+  const players = (await client.execute('SELECT id, name, badge_no FROM players')).rows;
+  const pmap = {};
+  for (const p of players) pmap[p.id] = p;
+  const regs = (await client.execute({
+    sql: 'SELECT r.player_id, p.name, p.badge_no FROM registrations r LEFT JOIN players p ON p.id = r.player_id WHERE r.event_id = ?',
+    args: [eventId],
+  })).rows;
+  for (const r of regs) {
+    if (!pmap[r.player_id] && r.name) pmap[r.player_id] = { id: r.player_id, name: r.name, badge_no: r.badge_no };
+  }
   const pts = {};
   for (const t of teams) {
     const members = JSON.parse(t.member_ids);
@@ -227,7 +251,7 @@ export async function standings(eventId) {
   return Object.entries(pts)
     .map(([pid, points]) => ({
       player_id: Number(pid),
-      name: pmap[pid]?.name || '?',
+      name: pmap[pid]?.name || ('#' + pid),
       badge: pmap[pid]?.badge_no || '',
       points,
     }))

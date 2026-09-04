@@ -189,15 +189,24 @@ export async function listTeams(eventId, roundNo = null) {
     : 'SELECT * FROM teams WHERE event_id = ?';
   const args = roundNo ? [eventId, roundNo] : [eventId];
   const teams = (await client.execute({ sql, args })).rows;
+  // 先建 players map；若断链，再回退用 registrations 补名
   const players = (await client.execute('SELECT id, name, badge_no FROM players')).rows;
   const pmap = {};
   for (const p of players) pmap[p.id] = p;
+  // 取该场所有报名，补足断链选手
+  const regs = (await client.execute({
+    sql: 'SELECT r.player_id, p.name, p.badge_no FROM registrations r LEFT JOIN players p ON p.id = r.player_id WHERE r.event_id = ?',
+    args: [eventId],
+  })).rows;
+  for (const r of regs) {
+    if (!pmap[r.player_id] && r.name) pmap[r.player_id] = { id: r.player_id, name: r.name, badge_no: r.badge_no };
+  }
   return teams.map((t) => ({
     ...t,
     name: t.name || ('第 ' + (t.id) + ' 隊'),
     members: JSON.parse(t.member_ids).map((mid) => ({
       id: mid,
-      name: pmap[mid]?.name || '?',
+      name: pmap[mid]?.name || ('#' + mid),
       badge: pmap[mid]?.badge_no || '',
     })),
   }));
