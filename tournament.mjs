@@ -106,12 +106,12 @@ export async function buildAllRounds(eventId) {
         out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: a, teamB: b });
       }
       if (bye != null) {
-        // 輪空也寫入 matches，前端才能渲染
+        // 輪空：自動判勝 +2 分
         const r2 = await client.execute({
-          sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, NULL)',
-          args: [eventId, r, bye],
+          sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b, winner, points_a, points_b) VALUES (?, ?, ?, NULL, ?, ?, ?)',
+          args: [eventId, r, bye, 'A', 2, 0],
         });
-        out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: bye, teamB: null });
+        out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: bye, teamB: null, winner: 'A', pointsA: 2 });
       }
     }
     return { mode, rounds, matchups: out };
@@ -129,13 +129,13 @@ export async function buildAllRounds(eventId) {
       out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: sh[i], teamB: sh[i + 1] });
     }
     if (sh.length % 2 === 1) {
-      // 輪空寫入 matches
+      // 輪空：自動判勝 +2 分
       const bye = sh[sh.length - 1];
       const r2 = await client.execute({
-        sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, NULL)',
-        args: [eventId, r, bye],
+        sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b, winner, points_a, points_b) VALUES (?, ?, ?, NULL, ?, ?, ?)',
+        args: [eventId, r, bye, 'A', 2, 0],
       });
-      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: bye, teamB: null });
+      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: bye, teamB: null, winner: 'A', pointsA: 2 });
     }
   }
   return { mode, rounds, matchups: out };

@@ -155,6 +155,7 @@ async function loadMatches(roundNo) {
     return `<div class="seat ${side}"><span class="pos">${pos}</span><span class="nm">${member.name}</span><span class="bd">#${member.badge||'?'}</span><span class="role">${side==='A'?'紅隊':'藍隊'}</span></div>`;
   };
   const resultText = (m) => {
+    if (!m.team_b) return '<div class="mresult" style="color:var(--red);font-weight:700">輪空自動勝 +2分</div>';
     if (!m.winner) return '<div class="mresult muted">尚未記分</div>';
     const lav = m.level_a||'?', lbv = m.level_b||'?';
     if (m.winner==='draw') return `<div class="mresult">平局（紅 ${lav} / 藍 ${lbv} 同級）</div>`;
