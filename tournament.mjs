@@ -118,8 +118,29 @@ export async function buildAllRounds(eventId) {
   }
   // individual
   const out = [];
+  const byeCount = {}; // playerId -> 累计轮空次数
   for (let r = 1; r <= rounds; r++) {
-    const teamIds = await buildRoundTeams(eventId, r);
+    const playerIds = shuffle(await registeredPlayerIds(eventId));
+    if (playerIds.length % 2 === 1) {
+      // 优先让累计轮空最少的选手轮空
+      let minC = Infinity, byePid = playerIds[playerIds.length - 1];
+      for (const pid of playerIds) {
+        const c = byeCount[pid] || 0;
+        if (c < minC) { minC = c; byePid = pid; }
+      }
+      byeCount[byePid] = (byeCount[byePid] || 0) + 1;
+      // 把 byePid 移到最后（chunk 会把它单独成组）
+      const idx = playerIds.indexOf(byePid);
+      if (idx !== playerIds.length - 1) {
+        const tmp = playerIds[playerIds.length - 1];
+        playerIds[playerIds.length - 1] = byePid;
+        playerIds[idx] = tmp;
+      }
+    }
+    const teamIds = [];
+    for (const m of chunk(playerIds, 2)) {
+      teamIds.push(await createTeam(eventId, m, r));
+    }
     const sh = shuffle(teamIds);
     for (let i = 0; i < sh.length - 1; i += 2) {
       const r2 = await client.execute({
