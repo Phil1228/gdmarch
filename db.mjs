@@ -204,11 +204,14 @@ export async function listTeams(eventId, roundNo = null) {
   return teams.map((t) => ({
     ...t,
     name: t.name || ('第 ' + (t.id) + ' 隊'),
-    members: JSON.parse(t.member_ids).map((mid) => ({
-      id: mid,
-      name: pmap[mid]?.name || ('#' + mid),
-      badge: pmap[mid]?.badge_no || '',
-    })),
+    members: JSON.parse(t.member_ids).map((mid) => {
+      const pid = (typeof mid === 'object' && mid != null) ? (mid.playerId || mid.id || mid) : mid;
+      return {
+        id: pid,
+        name: pmap[pid]?.name || ('#' + pid),
+        badge: pmap[pid]?.badge_no || '',
+      };
+    }),
   }));
 }
 export async function playersMap() {

@@ -216,15 +216,15 @@ export async function standings(eventId) {
     })).rows;
     const pmap = await playersMap();
     return teams.map((t) => {
-      const ids = JSON.parse(t.member_ids);
-      // 級數 = max(teams.level_no 欄位, 從 matches 即時算出的歷史最高級) —— 兼容舊數據
+      const raw = JSON.parse(t.member_ids);
+      const ids = raw.map((mid) => (typeof mid === 'object' && mid != null ? (mid.playerId || mid.id || mid) : mid));
       const lv = Math.max(t.level_no ?? 0, maxLv[t.id] ?? 0);
       return {
         team_id: t.id,
         name: t.name || ('第 ' + t.id + ' 隊'),
-        members: ids.map((mid) => ({ id: mid, name: pmap[mid]?.name || '?', badge: pmap[mid]?.badge_no || '' })),
+        members: ids.map((pid) => ({ id: pid, name: pmap[pid]?.name || ('#' + pid), badge: pmap[pid]?.badge_no || '' })),
         points: acc[t.id] ?? 0,
-        level_no: lv, // 級數 (升級次數)
+        level_no: lv,
       };
     }).sort((a, b) => b.points - a.points || b.level_no - a.level_no);
   }
@@ -244,7 +244,7 @@ export async function standings(eventId) {
   }
   const pts = {};
   for (const t of teams) {
-    const members = JSON.parse(t.member_ids);
+    const members = JSON.parse(t.member_ids).map((mid) => (typeof mid === 'object' && mid != null ? (mid.playerId || mid.id || mid) : mid));
     const p = acc[t.id] ?? 0;
     for (const pid of members) pts[pid] = (pts[pid] ?? 0) + p;
   }
