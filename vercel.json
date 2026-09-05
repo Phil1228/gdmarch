@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "server.mjs": {
-      "includeFiles": "public/**, db/schema.sql"
+      "includeFiles": "server.mjs, tournament.mjs, db.mjs, public/**, db/schema.sql"
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/server.mjs" }]
