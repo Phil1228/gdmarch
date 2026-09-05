@@ -139,8 +139,13 @@ export async function buildAllRounds(eventId) {
       }
     }
     const teamIds = [];
+    let byeTeamId = null;
     for (const m of chunk(pids, 2)) {
-      teamIds.push(await createTeam(eventId, m, r));
+      if (m.length === 1) {
+        byeTeamId = await createTeam(eventId, m, r);
+      } else {
+        teamIds.push(await createTeam(eventId, m, r));
+      }
     }
     const sh = shuffle(teamIds);
     for (let i = 0; i < sh.length - 1; i += 2) {
@@ -150,14 +155,13 @@ export async function buildAllRounds(eventId) {
       });
       out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: sh[i], teamB: sh[i + 1] });
     }
-    if (sh.length % 2 === 1) {
+    if (byeTeamId != null) {
       // 輪空：自動判勝 +2 分
-      const bye = sh[sh.length - 1];
       const r2 = await client.execute({
         sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b, winner, points_a, points_b) VALUES (?, ?, ?, NULL, ?, ?, ?)',
-        args: [eventId, r, bye, 'A', 2, 0],
+        args: [eventId, r, byeTeamId, 'A', 2, 0],
       });
-      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: bye, teamB: null, winner: 'A', pointsA: 2 });
+      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: byeTeamId, teamB: null, winner: 'A', pointsA: 2 });
     }
   }
   return { mode, rounds, matchups: out };
