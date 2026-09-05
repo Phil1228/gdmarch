@@ -120,25 +120,26 @@ export async function buildAllRounds(eventId) {
   const out = [];
   const byeCount = {}; // playerId -> 累计轮空次数
   for (let r = 1; r <= rounds; r++) {
-    const playerIds = shuffle(await registeredPlayerIds(eventId));
-    if (playerIds.length % 2 === 1) {
+    const regs = await registeredPlayerIds(eventId);
+    const pids = shuffle(regs.map(x => x.playerId));
+    if (pids.length % 2 === 1) {
       // 优先让累计轮空最少的选手轮空
-      let minC = Infinity, byePid = playerIds[playerIds.length - 1];
-      for (const pid of playerIds) {
+      let minC = Infinity, byePid = pids[pids.length - 1];
+      for (const pid of pids) {
         const c = byeCount[pid] || 0;
         if (c < minC) { minC = c; byePid = pid; }
       }
       byeCount[byePid] = (byeCount[byePid] || 0) + 1;
       // 把 byePid 移到最后（chunk 会把它单独成组）
-      const idx = playerIds.indexOf(byePid);
-      if (idx !== playerIds.length - 1) {
-        const tmp = playerIds[playerIds.length - 1];
-        playerIds[playerIds.length - 1] = byePid;
-        playerIds[idx] = tmp;
+      const idx = pids.indexOf(byePid);
+      if (idx !== pids.length - 1) {
+        const tmp = pids[pids.length - 1];
+        pids[pids.length - 1] = byePid;
+        pids[idx] = tmp;
       }
     }
     const teamIds = [];
-    for (const m of chunk(playerIds, 2)) {
+    for (const m of chunk(pids, 2)) {
       teamIds.push(await createTeam(eventId, m, r));
     }
     const sh = shuffle(teamIds);
