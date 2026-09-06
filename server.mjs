@@ -48,7 +48,11 @@ export async function handleRequest(req, res) {
     res.end(JSON.stringify(obj));
   };
   const url = new URL(req.url, `http://localhost:${PORT}`);
-  const p = url.pathname;
+  // Vercel rewrite 会把路径改成 /server.mjs，需从 header 取原始路径
+  let p = url.pathname;
+  if (process.env.VERCEL) {
+    p = req.headers['x-vercel-rewrite-path'] || req.headers['x-forwarded-path'] || p;
+  }
   const getOrigin = (req) => {
     const fwdHost = req.headers?.['x-forwarded-host'];
     const fwdProto = req.headers?.['x-forwarded-proto'] || 'https';
@@ -376,9 +380,21 @@ async function serveHtml(res, filepath, ctx) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
   } catch (e) {
-    console.error('serveHtml 404:', filepath, e.message);
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('not found: ' + filepath);
+    // 双路径兼容 Vercel 输出目录不确定的情况
+    const alt = filepath.startsWith(__dirname)
+      ? filepath.replace(__dirname, BASEDIR)
+      : filepath.replace(BASEDIR, __dirname);
+    try {
+      let html = await readFile(alt, 'utf-8');
+      html = html.replace(/__EVENT_ID__/g, ctx.eventId || '')
+                 .replace(/__EVENT_NAME__/g, ctx.eventName || '');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+    } catch (e2) {
+      console.error('serveHtml 404 both:', filepath, alt, e2.message);
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('not found');
+    }
   }
 }
 
