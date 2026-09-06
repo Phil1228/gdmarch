@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const BASEDIR = process.cwd(); // Vercel 有时 cwd 与 __dirname 不同
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer, searchPlayers,
   createEvent, getEvent, listEvents, setEventStatus,
@@ -374,9 +375,10 @@ async function serveHtml(res, filepath, ctx) {
                .replace(/__EVENT_NAME__/g, ctx.eventName || '');
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
-  } catch {
+  } catch (e) {
+    console.error('serveHtml 404:', filepath, e.message);
     res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('not found');
+    res.end('not found: ' + filepath);
   }
 }
 
