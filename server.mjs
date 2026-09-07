@@ -48,12 +48,24 @@ export async function handleRequest(req, res) {
     res.end(JSON.stringify(obj));
   };
   const url = new URL(req.url, `http://localhost:${PORT}`);
-  // Vercel rewrite 会把路径改成 /server.mjs，需从 header 取原始路径
-  let p = url.pathname;
-  if (process.env.VERCEL) {
-    p = req.headers['x-vercel-rewrite-path'] || req.headers['x-forwarded-path'] || p;
+  // Vercel rewrite 會把 req.url 改掉，用 NODE_BUFFER 配合 __dirname 判斷真實路徑
+  const nodeBuffer = req.headers['x-vercel-node-buffer'];
+  if (nodeBuffer) {
+    try {
+      const decoded = Buffer.from(nodeBuffer, 'base64').toString('utf-8');
+      // decoded 格式: "/api/events/18/matches"
+      p = decoded;
+    } catch {}
   }
-  console.log('VERCEL PATH DEBUG:', JSON.stringify({p, url: req.url, xVercelRewritePath: req.headers['x-vercel-rewrite-path'], xForwardedPath: req.headers['x-forwarded-path']}));
+  console.log('VERCEL PATH DEBUG:', JSON.stringify({
+    p, url: req.url, xVercelRewritePath: req.headers['x-vercel-rewrite-path'],
+    xForwardedPath: req.headers['x-forwarded-path'], NODE_BUFFER: req.headers['x-vercel-node-buffer']
+  }));
+  const allHeaders = Object.entries(req.headers)
+    .filter(([k]) => /path|original|rewrite|forward|node-buffer/i.test(k))
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(' | ');
+  console.log('VERCEL HEADERS:', allHeaders || 'no path-related headers');
   const getOrigin = (req) => {
     const fwdHost = req.headers?.['x-forwarded-host'];
     const fwdProto = req.headers?.['x-forwarded-proto'] || 'https';
