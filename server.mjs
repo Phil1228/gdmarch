@@ -74,6 +74,13 @@ export async function handleRequest(req, res) {
     .map(([k, v]) => `${k}: ${v}`)
     .join(' | ');
   console.log('VERCEL HEADERS:', allHeaders || 'no path-related headers');
+
+  // === Vercel 沒有傳原始路徑的兼容：從 query 或 header 裡搶救 ===
+  if (p === '/api/index.mjs' || p === '/server.mjs') {
+    // Vercel 重寫可能會在 query 裡留一份原始路徑（如 ?q=/admin）
+    const maybePath = url.searchParams.get('q') || url.searchParams.get('x-original-path');
+    if (maybePath) p = maybePath;
+  }
   const getOrigin = (req) => {
     const fwdHost = req.headers?.['x-forwarded-host'];
     const fwdProto = req.headers?.['x-forwarded-proto'] || 'https';
