@@ -50,22 +50,24 @@ export async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   // Vercel rewrite 會把 req.url 改掉，用 NODE_BUFFER 配合 __dirname 判斷真實路徑
   let p = url.pathname;
-  // Vercel rewrite 會把 req.url 改掉，嘗試從 header 恢復原始路徑
   if (process.env.VERCEL) {
-    p = req.headers['x-vercel-rewrite-path'] ||
+    p = url.searchParams.get('path') ||
+        req.headers['x-vercel-rewrite-path'] ||
         req.headers['x-forwarded-path'] ||
         url.pathname;
-    // 某些情況下 Vercel 會把原始路徑 base64 編碼放在 x-vercel-node-buffer
     const nodeBuffer = req.headers['x-vercel-node-buffer'];
     if (nodeBuffer) {
-      try {
-        p = Buffer.from(nodeBuffer, 'base64').toString('utf-8');
-      } catch {}
+      try { p = Buffer.from(nodeBuffer, 'base64').toString('utf-8'); } catch {}
+    }
+    // パスが /api/index.mjs または /server.mjs のままなら query path 経由を試す
+    if (p === '/api/index.mjs' || p === '/server.mjs') {
+      p = url.searchParams.get('path') || url.pathname;
     }
   }
-  console.log('VERCEL PATH DEBUG:', JSON.stringify({
-    p, url: req.url, xVercelRewritePath: req.headers['x-vercel-rewrite-path'],
-    xForwardedPath: req.headers['x-forwarded-path'], NODE_BUFFER: req.headers['x-vercel-node-buffer'] ? 'YES (decoded above)' : 'no'
+  console.log('VERCEL PATH DEBUG:', JSON.stringify({ p, url: req.url,
+    searchParams: Object.fromEntries(url.searchParams),
+    xVercelRewritePath: req.headers['x-vercel-rewrite-path'],
+    xForwardedPath: req.headers['x-forwarded-path'],
   }));
   const allHeaders = Object.entries(req.headers)
     .filter(([k]) => /path|original|rewrite|forward|node-buffer/i.test(k))
