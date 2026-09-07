@@ -53,6 +53,7 @@ export async function handleRequest(req, res) {
   if (process.env.VERCEL) {
     p = req.headers['x-vercel-rewrite-path'] || req.headers['x-forwarded-path'] || p;
   }
+  console.log('VERCEL PATH DEBUG:', JSON.stringify({p, url: req.url, xVercelRewritePath: req.headers['x-vercel-rewrite-path'], xForwardedPath: req.headers['x-forwarded-path']}));
   const getOrigin = (req) => {
     const fwdHost = req.headers?.['x-forwarded-host'];
     const fwdProto = req.headers?.['x-forwarded-proto'] || 'https';
