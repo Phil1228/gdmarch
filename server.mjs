@@ -49,17 +49,23 @@ export async function handleRequest(req, res) {
   };
   const url = new URL(req.url, `http://localhost:${PORT}`);
   // Vercel rewrite 會把 req.url 改掉，用 NODE_BUFFER 配合 __dirname 判斷真實路徑
-  const nodeBuffer = req.headers['x-vercel-node-buffer'];
-  if (nodeBuffer) {
-    try {
-      const decoded = Buffer.from(nodeBuffer, 'base64').toString('utf-8');
-      // decoded 格式: "/api/events/18/matches"
-      p = decoded;
-    } catch {}
+  let p = url.pathname;
+  // Vercel rewrite 會把 req.url 改掉，嘗試從 header 恢復原始路徑
+  if (process.env.VERCEL) {
+    p = req.headers['x-vercel-rewrite-path'] ||
+        req.headers['x-forwarded-path'] ||
+        url.pathname;
+    // 某些情況下 Vercel 會把原始路徑 base64 編碼放在 x-vercel-node-buffer
+    const nodeBuffer = req.headers['x-vercel-node-buffer'];
+    if (nodeBuffer) {
+      try {
+        p = Buffer.from(nodeBuffer, 'base64').toString('utf-8');
+      } catch {}
+    }
   }
   console.log('VERCEL PATH DEBUG:', JSON.stringify({
     p, url: req.url, xVercelRewritePath: req.headers['x-vercel-rewrite-path'],
-    xForwardedPath: req.headers['x-forwarded-path'], NODE_BUFFER: req.headers['x-vercel-node-buffer']
+    xForwardedPath: req.headers['x-forwarded-path'], NODE_BUFFER: req.headers['x-vercel-node-buffer'] ? 'YES (decoded above)' : 'no'
   }));
   const allHeaders = Object.entries(req.headers)
     .filter(([k]) => /path|original|rewrite|forward|node-buffer/i.test(k))
