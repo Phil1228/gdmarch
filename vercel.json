@@ -1,3 +1,12 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/server.mjs?path=/api/{1}" },
+    { "source": "/admin", "destination": "/server.mjs?path=/admin" },
+    { "source": "/login", "destination": "/server.mjs?path=/login" },
+    { "source": "/event/:id", "destination": "/server.mjs?path=/event/{id}" },
+    { "source": "/view/:id", "destination": "/server.mjs?path=/view/{id}" },
+    { "source": "/register/:id", "destination": "/server.mjs?path=/register/{id}" },
+    { "source": "/(.*)", "destination": "/server.mjs?path=/" }
+  ]
 }
