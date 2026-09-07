@@ -1,9 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "server.mjs": {
-      "includeFiles": "**/*"
-    }
-  },
-  "rewrites": [{ "source": "/(.*)", "destination": "/server.mjs" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.mjs" },
+    { "source": "/admin", "destination": "/api/index.mjs" },
+    { "source": "/login", "destination": "/api/index.mjs" },
+    { "source": "/event/:id", "destination": "/api/index.mjs" },
+    { "source": "/view/:id", "destination": "/api/index.mjs" },
+    { "source": "/register/:id", "destination": "/api/index.mjs" },
+    { "source": "/(.*)", "destination": "/api/index.mjs" }
+  ]
 }
