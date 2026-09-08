@@ -116,38 +116,60 @@ export async function buildAllRounds(eventId) {
     }
     return { mode, rounds, matchups: out };
   }
-  // individual
+  // individual: 每輪重隨機 2 人隊 (round_no = 該輪)
+  // 輪空以「選手」為單位追蹤：每輪隊伍數若為奇數 →選出 1 人輪空；累計 byeCount 確保跨輪平均
   const out = [];
-  const byeCount = {}; // playerId -> 累计轮空次数
+  // 從已有 matches 讀取每位選手現有的輪空次數，避免重建時重置
+  const existingBye = {};
+  {
+    const byeRows = await client.execute({
+      sql: `SELECT t.member_ids, COUNT(*) AS cnt
+            FROM matches m JOIN teams t ON t.id = m.team_a
+            WHERE m.event_id = ? AND m.round_no IS NOT NULL AND m.team_b IS NULL
+            GROUP BY t.member_ids`,
+      args: [eventId],
+    });
+    for (const row of byeRows.rows) {
+      const mids = JSON.parse(row.member_ids);
+      const pid = typeof mids[0] === 'object' ? (mids[0].playerId || mids[0].id) : mids[0];
+      existingBye[pid] = (existingBye[pid] || 0) + row.cnt;
+    }
+  }
+  const byeCount = { ...existingBye }; // 帶著既有記錄繼續累加
   for (let r = 1; r <= rounds; r++) {
     const regs = await registeredPlayerIds(eventId);
     const pids = shuffle(regs.map(x => x.playerId));
-    if (pids.length % 2 === 1) {
-      // 优先让累计轮空最少的选手轮空
-      let minC = Infinity, byePid = pids[pids.length - 1];
+    if (!pids.length) continue;
+    // 每輪的隊伍數 = ceil(pids.length / 2)
+    // 當隊伍數為奇數時，需要 1 位輪空選手（讓隊伍數變成 짝수，方便两两配对）
+    const teamCount = Math.ceil(pids.length / 2);
+    const needBye = teamCount % 2 === 1;
+    let byePid = null;
+    if (needBye) {
+      // 選出累计轮空最少的选手（ tie-breaker: 随机.shuffle 已打亂順序，故取先遇到的最小值即可）
+      let minC = Infinity;
       for (const pid of pids) {
         const c = byeCount[pid] || 0;
         if (c < minC) { minC = c; byePid = pid; }
       }
       byeCount[byePid] = (byeCount[byePid] || 0) + 1;
-      // 把 byePid 移到最后（chunk 会把它单独成组）
-      const idx = pids.indexOf(byePid);
-      if (idx !== pids.length - 1) {
-        const tmp = pids[pids.length - 1];
-        pids[pids.length - 1] = byePid;
-        pids[idx] = tmp;
+    }
+    // 組隊：輪空選手單獨一組（1 人），其餘兩兩一組
+    const teamsThisRound = [];
+    if (byePid != null) {
+      teamsThisRound.push({ id: await createTeam(eventId, [byePid], r), members: [byePid], isBye: true });
+      const rest = pids.filter(pid => pid !== byePid);
+      for (const m of chunk(rest, 2)) {
+        teamsThisRound.push({ id: await createTeam(eventId, m, r), members: m, isBye: false });
+      }
+    } else {
+      for (const m of chunk(pids, 2)) {
+        teamsThisRound.push({ id: await createTeam(eventId, m, r), members: m, isBye: false });
       }
     }
-    const teamIds = [];
-    let byeTeamId = null;
-    for (const m of chunk(pids, 2)) {
-      if (m.length === 1) {
-        byeTeamId = await createTeam(eventId, m, r);
-      } else {
-        teamIds.push(await createTeam(eventId, m, r));
-      }
-    }
-    const sh = shuffle(teamIds);
+    // 配對：僅輪空以外的隊兩兩配對
+    const matchTeams = teamsThisRound.filter(t => !t.isBye).map(t => t.id);
+    const sh = shuffle(matchTeams);
     for (let i = 0; i < sh.length - 1; i += 2) {
       const r2 = await client.execute({
         sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, ?)',
@@ -155,13 +177,14 @@ export async function buildAllRounds(eventId) {
       });
       out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: sh[i], teamB: sh[i + 1] });
     }
-    if (byeTeamId != null) {
-      // 輪空：自動判勝 +2 分
+    // 輪空記録（若有）
+    if (byePid != null) {
+      const byeTeam = teamsThisRound.find(t => t.isBye);
       const r2 = await client.execute({
         sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b, winner, points_a, points_b) VALUES (?, ?, ?, NULL, ?, ?, ?)',
-        args: [eventId, r, byeTeamId, 'A', 2, 0],
+        args: [eventId, r, byeTeam.id, 'A', 2, 0],
       });
-      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: byeTeamId, teamB: null, winner: 'A', pointsA: 2 });
+      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: byeTeam.id, teamB: null, winner: 'A', pointsA: 2 });
     }
   }
   return { mode, rounds, matchups: out };
