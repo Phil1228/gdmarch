@@ -1,4 +1,1 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "//": "trigger redeploy for rankings API"
-}
+{}
