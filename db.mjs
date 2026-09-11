@@ -217,8 +217,10 @@ export async function listTeams(eventId, roundNo = null) {
   }));
 }
 export async function playersMap() {
-  const rows = (await client.execute('SELECT id, name, badge_no FROM players')).rows;
-  const m = {};
+  for (const r of rows) m[r.id] = r;
+  return m;
+}
+
 // 段位常量與函數
 export const RANKS = ['青铜', '白银', '黄金', '白金', '钻石', '王者'];
 export function getRankInfo(points) {
