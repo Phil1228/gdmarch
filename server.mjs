@@ -51,20 +51,26 @@ export async function handleRequest(req, res) {
   // Vercel rewrite 會把 req.url 改掉，用 NODE_BUFFER 配合 __dirname 判斷真實路徑
   let p = url.pathname;
   if (process.env.VERCEL) {
-    p = url.searchParams.get('path') ||
-        req.headers['x-vercel-rewrite-path'] ||
-        req.headers['x-forwarded-path'] ||
-        url.pathname;
+    const pathParam = url.searchParams.get('path') || '';
+    p = pathParam || req.headers['x-vercel-rewrite-path'] ||
+        req.headers['x-forwarded-path'] || url.pathname;
+    // Vercel 有时给 path 加前缀 /，统一处理
+    if (p.startsWith('/api/')) {
+      // 保證 /api/events 也能匹配 /api/events/ 的請求
+    }
     const nodeBuffer = req.headers['x-vercel-node-buffer'];
     if (nodeBuffer) {
       try { p = Buffer.from(nodeBuffer, 'base64').toString('utf-8'); } catch {}
     }
-    // パスが /api/index.mjs または /server.mjs のままなら query path 経由を試す
     if (p === '/api/index.mjs' || p === '/server.mjs') {
-      p = url.searchParams.get('path') || url.pathname;
+      p = pathParam || url.pathname;
     }
   }
-  console.log('VERCEL PATH DEBUG:', JSON.stringify({ p, url: req.url,
+  // 刪除 api/ 路徑末尾多餘斜杠以免匹配失敗
+  const pClean = p.replace(/\/+$/, '');
+  console.log('VERCEL PATH DEBUG:', JSON.stringify({
+    raw: p, clean: pClean, url: req.url,
+    pathParam: url.searchParams.get('path'),
     searchParams: Object.fromEntries(url.searchParams),
     xVercelRewritePath: req.headers['x-vercel-rewrite-path'],
     xForwardedPath: req.headers['x-forwarded-path'],
@@ -74,12 +80,12 @@ export async function handleRequest(req, res) {
     .map(([k, v]) => `${k}: ${v}`)
     .join(' | ');
   console.log('VERCEL HEADERS:', allHeaders || 'no path-related headers');
-
-  // === Vercel 沒有傳原始路徑的兼容：從 query 或 header 裡搶救 ===
-  if (p === '/api/index.mjs' || p === '/server.mjs') {
-    // Vercel 重寫可能會在 query 裡留一份原始路徑（如 ?q=/admin）
-    const maybePath = url.searchParams.get('q') || url.searchParams.get('x-original-path');
-    if (maybePath) p = maybePath;
+  // 為後續路由使用 pClean（去除末尾斜杠），確保 /api/events/ 也能匹配 /api/events
+  if (!pClean && p) {
+    // 兼容: 當 pClean 為空且 p 原本為 "/" 時
+    p = '/';
+  } else {
+    p = pClean;
   }
   const getOrigin = (req) => {
     const fwdHost = req.headers?.['x-forwarded-host'];

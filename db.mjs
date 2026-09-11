@@ -30,6 +30,8 @@ async function ensureSchema() {
   catch { /* 已存在則忽略 */ }
   try { await client.execute("ALTER TABLE registrations ADD COLUMN team_no INTEGER"); } catch { /* 已存在則忽略 */ }
   try { await client.execute("ALTER TABLE teams ADD COLUMN level_no INTEGER DEFAULT 0"); } catch { /* 已存在則忽略 */ }
+  // 選手總積分欄位 (全域積分榜用)
+  try { await client.execute("ALTER TABLE players ADD COLUMN total_points INTEGER NOT NULL DEFAULT 0"); } catch { /* 已存在則忽略 */ }
   // 用戶系統表 (與共用 DB 中其他 app 的 users 表區隔, 用 gd_ 前綴)
   await client.execute("CREATE TABLE IF NOT EXISTS gd_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT, role TEXT DEFAULT 'user', created_at TEXT DEFAULT (datetime('now')))");
   await client.execute("CREATE TABLE IF NOT EXISTS gd_sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT)");
@@ -217,6 +219,53 @@ export async function listTeams(eventId, roundNo = null) {
 export async function playersMap() {
   const rows = (await client.execute('SELECT id, name, badge_no FROM players')).rows;
   const m = {};
-  for (const r of rows) m[r.id] = r;
-  return m;
+// 段位常量與函數
+export const RANKS = ['青铜', '白银', '黄金', '白金', '钻石', '王者'];
+export function getRankInfo(points) {
+  const level = Math.floor(points / 20) + 1;
+  const rankIndex = Math.floor((level - 1) / 5);
+  let rank, grade;
+  if (rankIndex >= RANKS.length) {
+    rank = RANKS[RANKS.length - 1];
+    grade = level - (RANKS.length - 1) * 5;
+  } else {
+    rank = RANKS[rankIndex];
+    grade = (level - 1) % 5 + 1;
+  }
+  return { rank, level, grade };
+}
+// 根據隊伍成績分發積分給成員
+async function addPointsToTeam(teamId, points) {
+  if (points <= 0) return;
+  const t = await client.execute({ sql: 'SELECT member_ids FROM teams WHERE id = ?', args: [teamId] });
+  if (!t.rows[0]) return;
+  const memberIds = JSON.parse(t.rows[0].member_ids);
+  for (const mid of memberIds) {
+    const pid = (typeof mid === 'object' && mid != null) ? (mid.playerId || mid.id || mid) : mid;
+    const r = await client.execute({ sql: 'UPDATE players SET total_points = total_points + ? WHERE id = ?', args: [points, pid] });
+    if (r.rowsAffected === 0) {
+      await client.execute({ sql: "INSERT OR IGNORE INTO players (id, name, total_points) VALUES (?, '', ?)", args: [pid, 0] });
+      await client.execute({ sql: 'UPDATE players SET total_points = total_points + ? WHERE id = ?', args: [points, pid] });
+    }
+  }
+}
+// 記分完成後，更新選手個人總積分
+export async function awardMatchPoints(matchId) {
+  const m = await client.execute({ sql: 'SELECT team_a, team_b, points_a, points_b FROM matches WHERE id = ?', args: [matchId] });
+  const row = m.rows[0];
+  if (!row) return;
+  const { team_a, team_b, points_a, points_b } = row;
+  if (points_a != null && points_a > 0 && team_a != null) await addPointsToTeam(team_a, points_a);
+  if (points_b != null && points_b > 0 && team_b != null) await addPointsToTeam(team_b, points_b);
+}
+// 獲取全域積分排行榜
+export async function getGlobalRankings() {
+  const players = await client.execute('SELECT id, name, badge_no, total_points FROM players ORDER BY total_points DESC');
+  return players.rows.map(p => ({
+    id: p.id,
+    name: p.name,
+    badge_no: p.badge_no,
+    total_points: p.total_points,
+    ...getRankInfo(p.total_points)
+  }));
 }

@@ -1,4 +1,4 @@
-import client, { createTeam, listTeams, registeredPlayerIds, getEvent, playersMap } from './db.mjs';
+import client, { createTeam, listTeams, registeredPlayerIds, getEvent, playersMap, awardMatchPoints } from './db.mjs';
 
 // ---------- 工具 ----------
 export function shuffle(arr) {
@@ -116,9 +116,21 @@ export async function buildAllRounds(eventId) {
     }
     return { mode, rounds, matchups: out };
   }
-  // individual: 每輪重隨機 2 人隊 (round_no = 該輪)
-  // 輪空以「選手」為單位追蹤：每輪隊伍數若為奇數 →選出 1 人輪空；累計 byeCount 確保跨輪平均
+  // individual: 每輪按 m mod 4 決定輪空人數 a，剩餘為 4 的倍數 → 組隊 + 配對
+  // 選手輪空追蹤：累計 byeCount 最小優先
   const out = [];
+  // 讀取該場比賽當前註冊選手數 m（每輪重新取值）
+  const regs = await registeredPlayerIds(eventId);
+  const allPids = shuffle(regs.map(x => x.playerId));
+  const m = allPids.length;
+  if (m < 4) {
+    // 少於 4 人無法組成一桌（4 人 = 兩隊對戰）
+    throw new Error(`該賽事個人賽選手數 m=${m} 少於 4 人，無法建立比賽。`);
+  }
+  const a = m % 4; // 每輪輪空人數
+  if (a === 0 && m >= 4) {
+    // 全員可組隊，無輪空
+  }
   // 從已有 matches 讀取每位選手現有的輪空次數，避免重建時重置
   const existingBye = {};
   {
@@ -135,56 +147,69 @@ export async function buildAllRounds(eventId) {
       existingBye[pid] = (existingBye[pid] || 0) + row.cnt;
     }
   }
-  const byeCount = { ...existingBye }; // 帶著既有記錄繼續累加
+  const byeCount = { ...existingBye };
   for (let r = 1; r <= rounds; r++) {
-    const regs = await registeredPlayerIds(eventId);
-    const pids = shuffle(regs.map(x => x.playerId));
-    if (!pids.length) continue;
-    // 每輪的隊伍數 = ceil(pids.length / 2)
-    // 當隊伍數為奇數時，需要 1 位輪空選手（讓隊伍數變成 짝수，方便两两配对）
-    const teamCount = Math.ceil(pids.length / 2);
-    const needBye = teamCount % 2 === 1;
-    let byePid = null;
-    if (needBye) {
-      // 選出累计轮空最少的选手（ tie-breaker: 随机.shuffle 已打亂順序，故取先遇到的最小值即可）
-      let minC = Infinity;
-      for (const pid of pids) {
-        const c = byeCount[pid] || 0;
-        if (c < minC) { minC = c; byePid = pid; }
+    const pids = shuffle(allPids.map(pid => pid)); // 每輪重排
+    // 選出該輪輪空選手（a 人）—— 累计 byeCount 最小優先，tie-breaker 取先遇者
+    const byePids = [];
+    if (a > 0) {
+      // 選出邏輯：每輪都從全選手池裡選出累计 byeCount 最小的 a 人
+      // 但有一個 corner case 要處理：若該輪選手數恰好全部都輪過一遍了
+      // 則沒法再確保「每人剛好 1 次」，只能繼續按最小值選出
+      // 針對賽事 18 (m=6,a=2,r=3) 這種「剛好每人 1 次」的情況特別優化：
+      // 當 r 是最後一輪且所有選手累计都相同時，按 shuffle 順序取前 a 位即可
+      // （否則 sort 會因為所有值相同而產生穩定的原序，導致每輪都抽到同一批人）
+
+      // 第一階段：選出累计最小的 a 人
+      const sorted = [...pids].sort((x, y) => {
+        const cx = byeCount[x] || 0;
+        const cy = byeCount[y] || 0;
+        return cx - cy;
+      });
+      // 如果排序後的前 a 位全部都是最小值（意味著還沒輪空過的人有足夠多）
+      // 就直接取他們
+      const minVal = byeCount[sorted[0]] || 0;
+      const candidates = sorted.filter(pid => (byeCount[pid] || 0) === minVal);
+      // 從候選者中取需要數量（若候選者足夠就直接取，否則取全部後續補）
+      const takeFromCandidates = Math.min(a, candidates.length);
+      for (let i = 0; i < takeFromCandidates; i++) {
+        const pid = candidates[i];
+        byePids.push(pid);
+        byeCount[pid] = (byeCount[pid] || 0) + 1;
       }
-      byeCount[byePid] = (byeCount[byePid] || 0) + 1;
+      // 若候選者不夠（極端情況），剩餘從排序繼續取
+      if (byePids.length < a) {
+        for (const pid of sorted) {
+          if (byePids.includes(pid)) continue;
+          byePids.push(pid);
+          byeCount[pid] = (byeCount[pid] || 0) + 1;
+          if (byePids.length === a) break;
+        }
+      }
     }
-    // 組隊：輪空選手單獨一組（1 人），其餘兩兩一組
-    const teamsThisRound = [];
-    if (byePid != null) {
-      teamsThisRound.push({ id: await createTeam(eventId, [byePid], r), members: [byePid], isBye: true });
-      const rest = pids.filter(pid => pid !== byePid);
-      for (const m of chunk(rest, 2)) {
-        teamsThisRound.push({ id: await createTeam(eventId, m, r), members: m, isBye: false });
-      }
-    } else {
-      for (const m of chunk(pids, 2)) {
-        teamsThisRound.push({ id: await createTeam(eventId, m, r), members: m, isBye: false });
-      }
+    const restPids = pids.filter(pid => !byePids.includes(pid));
+    // 剩餘人數肯定是 4 的倍數 → 能組成整數隊、整數桌
+    const teams = [];
+    for (let i = 0; i < restPids.length; i += 2) {
+      teams.push({ id: await createTeam(eventId, [restPids[i], restPids[i + 1]], r), memberIds: [restPids[i], restPids[i + 1]] });
     }
-    // 配對：僅輪空以外的隊兩兩配對
-    const matchTeams = teamsThisRound.filter(t => !t.isBye).map(t => t.id);
-    const sh = shuffle(matchTeams);
-    for (let i = 0; i < sh.length - 1; i += 2) {
+    // 隊隨機 shuffle 后兩兩一桌配對
+    const shTeams = shuffle(teams.map(t => t.id));
+    for (let i = 0; i < shTeams.length; i += 2) {
       const r2 = await client.execute({
         sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b) VALUES (?, ?, ?, ?)',
-        args: [eventId, r, sh[i], sh[i + 1]],
+        args: [eventId, r, shTeams[i], shTeams[i + 1]],
       });
-      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: sh[i], teamB: sh[i + 1] });
+      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: shTeams[i], teamB: shTeams[i + 1] });
     }
-    // 輪空記録（若有）
-    if (byePid != null) {
-      const byeTeam = teamsThisRound.find(t => t.isBye);
+    // 輪空隊（a 人組成 1 隊、 team_b = null）
+    if (byePids.length > 0) {
+      const byeTeamId = await createTeam(eventId, byePids, r);
       const r2 = await client.execute({
         sql: 'INSERT INTO matches (event_id, round_no, team_a, team_b, winner, points_a, points_b) VALUES (?, ?, ?, NULL, ?, ?, ?)',
-        args: [eventId, r, byeTeam.id, 'A', 2, 0],
+        args: [eventId, r, byeTeamId, 'A', 2, 0],
       });
-      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: byeTeam.id, teamB: null, winner: 'A', pointsA: 2 });
+      out.push({ matchId: Number(r2.lastInsertRowid), round: r, teamA: byeTeamId, teamB: null, winner: 'A', pointsA: 2, byeMemberIds: byePids });
     }
   }
   return { mode, rounds, matchups: out };
@@ -238,6 +263,8 @@ export async function recordMatch(matchId, levelA, levelB) {
     if (m.team_a != null) await client.execute({ sql: 'UPDATE teams SET level_no = MAX(level_no, ?) WHERE id = ?', args: [ia, m.team_a] });
     if (m.team_b != null) await client.execute({ sql: 'UPDATE teams SET level_no = MAX(level_no, ?) WHERE id = ?', args: [ib, m.team_b] });
   }
+  // 記分完成後更新選手個人總積分（全域排行榜用）
+  await awardMatchPoints(matchId);
   return { winner, points_a: pa, points_b: pb };
 }
 
