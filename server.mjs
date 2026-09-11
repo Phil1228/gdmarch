@@ -10,7 +10,7 @@ import {
   createEvent, getEvent, listEvents, setEventStatus,
   registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches, renameTeam, updateRegistration,
 } from './db.mjs';
-import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
+import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings, getGlobalRankings } from './tournament.mjs';
 import * as auth from './auth.mjs';
 
 // 運勢籤文：四等階各數則（title/text/yi宜/ji忌）—— 以掼蛋牌運為主軸
@@ -398,6 +398,11 @@ export async function handleRequest(req, res) {
     if (p.startsWith('/api/events/') && p.endsWith('/standings') && req.method === 'GET') {
       const eventId = Number(p.split('/')[3]);
       return send(200, await standings(eventId));
+    }
+
+    // ---------- 全域排行榜 ----------
+    if (p === '/api/rankings' && req.method === 'GET') {
+      return send(200, await getGlobalRankings());
     }
 
     return send(404, { error: 'not found' });
