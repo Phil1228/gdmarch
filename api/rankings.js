@@ -8,7 +8,9 @@ export default async function handler(req, res) {
   console.log('RANKINGS_HANDLER_HOOKED', {
     url: req.url,
     method: req.method,
-    headers: Object.fromEntries(Object.entries(req.headers).filter(([k]) => /rank|path|rewrite/i.test(k)))
+    headers: Object.fromEntries(
+      Object.entries(req.headers).filter(([k]) => /rank|path|rewrite/i.test(k))
+    )
   });
   try {
     const rankings = await getGlobalRankings();
