@@ -8,10 +8,11 @@ const BASEDIR = process.cwd(); // Vercel 有时 cwd 与 __dirname 不同
 import {
   listPlayers, addPlayer, deletePlayer, getPlayer, searchPlayers,
   createEvent, getEvent, listEvents, setEventStatus,
-  registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds, listTeams, listMatches, renameTeam, updateRegistration,
+  registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds,
+  listTeams, listMatches, renameTeam, updateRegistration,
+  getGlobalRankings,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
-import { getGlobalRankings } from './db.mjs';
 import * as auth from './auth.mjs';
 
 // 運勢籤文：四等階各數則（title/text/yi宜/ji忌）—— 以掼蛋牌運為主軸
