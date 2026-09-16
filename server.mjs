@@ -256,7 +256,7 @@ export async function handleRequest(req, res) {
     // 管理員：軟刪除賽事
     if (p.match(/\/api\/admin\/events\/\d+$/) && req.method === 'DELETE') {
       if (!me || me.role !== 'admin') return send(403, { error: '需要管理員權限' });
-      const id = Number(p.split('/')[3]);
+      const id = Number(p.split('/')[4]);
       await softDeleteEvent(id);
       return send(200, { ok: true });
     }
