@@ -32,6 +32,8 @@ async function ensureSchema() {
   try { await client.execute("ALTER TABLE teams ADD COLUMN level_no INTEGER DEFAULT 0"); } catch { /* 已存在則忽略 */ }
   // 選手總積分欄位 (全域積分榜用)
   try { await client.execute("ALTER TABLE players ADD COLUMN total_points INTEGER NOT NULL DEFAULT 0"); } catch { /* 已存在則忽略 */ }
+  // 軟刪除欄位 (標記刪除而非物理刪除)
+  try { await client.execute("ALTER TABLE events ADD COLUMN deleted_at TEXT"); } catch { /* 已存在則忽略 */ }
   // 用戶系統表 (與共用 DB 中其他 app 的 users 表區隔, 用 gd_ 前綴)
   await client.execute("CREATE TABLE IF NOT EXISTS gd_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT, role TEXT DEFAULT 'user', created_at TEXT DEFAULT (datetime('now')))");
   await client.execute("CREATE TABLE IF NOT EXISTS gd_sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT)");
@@ -102,13 +104,13 @@ export async function setEventStatus(id, status) {
   await client.execute({ sql: 'UPDATE events SET status = ? WHERE id = ?', args: [status, id] });
 }
 export async function getEvent(id) {
-  const r = await client.execute({ sql: 'SELECT * FROM events WHERE id = ?', args: [id] });
+  const r = await client.execute({ sql: 'SELECT * FROM events WHERE id = ? AND deleted_at IS NULL', args: [id] });
   const e = r.rows[0];
   if (e) { e.rule = JSON.parse(e.rule_config); e.visibility = e.visibility || 'public'; }
   return e;
 }
 export async function listEvents() {
-  const rows = (await client.execute('SELECT * FROM events ORDER BY id DESC')).rows;
+  const rows = (await client.execute('SELECT * FROM events WHERE deleted_at IS NULL ORDER BY id DESC')).rows;
   for (const e of rows) e.visibility = e.visibility || 'public';
   return rows;
 }
@@ -270,4 +272,77 @@ export async function getGlobalRankings() {
     total_points: p.total_points,
     ...getRankInfo(p.total_points)
   }));
+}
+
+// 軟刪除賽事 (標記 deleted_at，不回溯扣除個人積分)
+export async function softDeleteEvent(eventId) {
+  await client.execute({
+    sql: "UPDATE events SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL",
+    args: [eventId],
+  });
+}
+
+// 選手個人比賽記錄與該場得分（來自 teams.member_ids 與 matches points_*）
+export async function playerMatchHistory(playerId) {
+  const teams = (await client.execute({
+    sql: `SELECT t.id, t.event_id, t.round_no, t.member_ids, t.name AS team_name
+          FROM teams t
+          WHERE t.member_ids LIKE ?
+          ORDER BY t.event_id, t.round_no`,
+    args: [`%"${playerId}"%`],
+  })).rows;
+
+  const out = [];
+  for (const t of teams) {
+    let memberIds;
+    try { memberIds = JSON.parse(t.member_ids); } catch { continue; }
+    const isMember = memberIds.some(mid => {
+      const pid = (typeof mid === 'object' && mid != null) ? (mid.playerId || mid.id || mid) : mid;
+      return pid == playerId;
+    });
+    if (!isMember) continue;
+
+    const ev = await getEvent(t.event_id);
+    if (!ev) continue;
+
+    const teamMatches = (await client.execute({
+      sql: `SELECT m.id, m.round_no, m.team_a, m.team_b, m.winner, m.points_a, m.points_b,
+                   m.level_a, m.level_b
+            FROM matches m
+            WHERE (m.team_a = ? OR m.team_b = ?) AND m.event_id = ?
+            ORDER BY m.round_no, m.id`,
+      args: [t.id, t.id, t.event_id],
+    })).rows;
+
+    for (const m of teamMatches) {
+      const isTeamA = m.team_a == t.id;
+      const points = isTeamA ? (m.points_a ?? 0) : (m.points_b ?? 0);
+      const oppTeamId = isTeamA ? m.team_b : m.team_a;
+      let oppName = null;
+      if (oppTeamId != null) {
+        const opp = (await client.execute({ sql: 'SELECT name FROM teams WHERE id = ?', args: [oppTeamId] })).rows[0];
+        if (opp) oppName = opp.name;
+      }
+      out.push({
+        match_id: m.id,
+        event_id: t.event_id,
+        event_name: ev.name,
+        round_no: m.round_no,
+        team_id: t.id,
+        team_name: t.team_name || ('第 ' + t.id + ' 隊'),
+        is_winner: m.winner === (isTeamA ? 'A' : 'B'),
+        points_earned: points,
+        level_reached: isTeamA ? m.level_a : m.level_b,
+        opponent_team: oppName,
+        opponent_team_id: oppTeamId,
+      });
+    }
+  }
+  const seen = new Set();
+  return out.filter(r => {
+    const key = r.match_id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a, b) => b.points_earned - a.points_earned || b.match_id - a.match_id);
 }

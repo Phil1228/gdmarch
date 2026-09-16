@@ -199,12 +199,14 @@ async function loadMe() {
     const d = await (await fetch('/api/auth/me')).json();
     const box = $('me-box');
     if (d.user) {
+      window.__isAdmin = d.user.role === 'admin';
       box.innerHTML = `👤 ${d.user.displayName||d.user.username}${d.user.role==='admin'?'（管理員）':''} · <a href="#" onclick="logout()" style="color:#fff;opacity:.85">登出</a>`;
       if (d.user.role === 'admin') { const ub = $('tab-users-btn'); if (ub) ub.style.display = ''; }
     } else {
+      window.__isAdmin = false;
       box.innerHTML = `<a href="/login" style="color:#fff;opacity:.9">登入</a>`;
     }
-  } catch { $('me-box').textContent=''; }
+  } catch { $('me-box').textContent=''; window.__isAdmin = false; }
 }
 window.logout = async () => { await fetch('/api/auth/logout',{method:'POST'}); location.href='/'; };
 loadMe();
@@ -236,16 +238,28 @@ async function loadEvents() {
   box.innerHTML = shown.map(ev => {
     const c = (ev.rule_config ? JSON.parse(ev.rule_config) : {});
     const vis = ev.visibility === 'private' ? '<span class="tag private">私享</span>' : '<span class="tag public">公開</span>';
+    const isAdmin = window.__isAdmin ? '<button class="sm ghost" style="color:var(--red);border-color:var(--red)" onclick="deleteEvent('+ev.id+',\''+esc(ev.name).replace(/'/g,'\\\'')+'\')">刪除</button>' : '';
     return `<div class="ev-row">
       <div><div class="name">${ev.name}</div>
         <div class="meta">${vis} ${evTag(c.scoring_mode)} ${ruleText(c.round_rule)} · 共${c.rounds||'?'}輪 · ID ${ev.id}</div></div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="sm" onclick="location.href='/events/${ev.id}'">管理</button>
         <button class="sm ghost" onclick="genLink(${ev.id})">報名連結</button>
+        ${isAdmin}
       </div>
     </div>`;
   }).join('');
 }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+window.deleteEvent = async (id, name) => {
+  if (!confirm('確定要軟刪除「' + name + '」？此賽事將不參與統計但資料保留。')) return;
+  const d = await api('/api/admin/events/' + id, { method: 'DELETE' });
+  if (d.ok) { loadEvents(); }
+  else { alert('刪除失敗：' + (d.error || '未知錯誤')); }
+};
+
 // 輪數自動計算
 function calcRounds(mode, count) {
   if (!count || count < 1) return null;

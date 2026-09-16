@@ -10,6 +10,7 @@ import {
   createEvent, getEvent, listEvents, setEventStatus,
   registerPlayer, removeRegistration, listRegistrations, registeredPlayerIds,
   listTeams, listMatches, renameTeam, updateRegistration,
+  softDeleteEvent, playerMatchHistory,
   getGlobalRankings,
 } from './db.mjs';
 import { buildTeams, buildRoundTeams, buildMatchups, buildAllRounds, recordMatch, standings } from './tournament.mjs';
@@ -194,6 +195,11 @@ export async function handleRequest(req, res) {
       await deletePlayer(Number(p.split('/').pop()));
       return send(200, { ok: true });
     }
+    // 選手個人比賽歷史（點擊積分榜人名彈出）
+    if (p.match(/\/api\/players\/\d+\/history$/) && req.method === 'GET') {
+      const pid = Number(p.split('/')[3]);
+      return send(200, await playerMatchHistory(pid));
+    }
 
     // ---------- 今日運勢籤 ----------
     if (p === '/api/fortune' && req.method === 'GET') {
@@ -246,6 +252,13 @@ export async function handleRequest(req, res) {
         ? all
         : all.filter(e => e.visibility === 'public' || (me && e.owner_id === me.id));
       return send(200, filtered);
+    }
+    // 管理員：軟刪除賽事
+    if (p.match(/\/api\/admin\/events\/\d+$/) && req.method === 'DELETE') {
+      if (!me || me.role !== 'admin') return send(403, { error: '需要管理員權限' });
+      const id = Number(p.split('/')[3]);
+      await softDeleteEvent(id);
+      return send(200, { ok: true });
     }
     if (p.startsWith('/api/events/') && p.endsWith('/detail') && req.method === 'GET') {
       const id = Number(p.split('/')[3]);
