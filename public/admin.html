@@ -368,8 +368,9 @@ $('btn-import').onclick = async () => {
 };
 async function delPlayer(id) {
   if (!confirm('確定刪除該選手？')) return;
-  await api('/api/players/' + id, { method:'DELETE' });
-  loadPlayers();
+  const d = await api('/api/players/' + id, { method:'DELETE' });
+  if (d.ok) { loadPlayers(); }
+  else { $('p-msg').className = 'msg err'; $('p-msg').textContent = '刪除失敗：' + (d.error || '未知錯誤'); }
 }
 
 // ---- 用戶管理 (admin) ----
