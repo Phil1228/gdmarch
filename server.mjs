@@ -191,7 +191,10 @@ export async function handleRequest(req, res) {
       const { id, badge } = await addPlayer(b.name, b.contact, b.note, b.source || 'manual');
       return send(201, { id, badge });
     }
+    // 刪除選手 (admin-only)
     if (p.startsWith('/api/players/') && req.method === 'DELETE') {
+      if (!me) return send(401, { error: '請先登入' });
+      if (me.role !== 'admin') return send(403, { error: '需要管理員權限' });
       await deletePlayer(Number(p.split('/').pop()));
       return send(200, { ok: true });
     }
