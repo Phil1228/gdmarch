@@ -83,6 +83,8 @@ export async function getPlayer(id) {
   return r.rows[0];
 }
 export async function deletePlayer(id) {
+  // 先刪報名紀錄 (解除 foreign key 約束)
+  await client.execute({ sql: 'DELETE FROM registrations WHERE player_id = ?', args: [id] });
   await client.execute({ sql: 'DELETE FROM players WHERE id = ?', args: [id] });
 }
 
