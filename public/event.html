@@ -146,8 +146,9 @@
       </div>
     </div>
     <div class="card">
-      <h3>批量導入（CSV / 每行：姓名,隊號,手機,備註）</h3>
-      <textarea id="csv" rows="5" placeholder="小明,1&#10;小華,1&#10;小美,2&#10;小強,2"></textarea>
+      <h3>批量導入（CSV）</h3>
+      <p class="muted" style="font-size:12px;margin-bottom:8px">每行格式：姓名,隊號,手機,備註（姓名必填，其餘選填）</p>
+      <textarea id="csv" rows="5" placeholder="小明,1,59511111,&#10;小華,1,,&#10;小美,2,59533333,&#10;小強,2,,"></textarea>
       <button class="mt" id="btn-import">匯入並報名本場</button>
       <div class="msg" id="csv-msg"></div>
     </div>
