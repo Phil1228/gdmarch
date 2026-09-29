@@ -228,9 +228,13 @@ async function loadEvents() {
       const mode = ev.rule?.scoring_mode || 'individual';
       const rounds = ev.rule?.rounds || 1;
       const m = ev.rule?.participant_count;
+      const statusMap = { open: '報名中', started: '進行中', closed: '已結束' };
+      const statusText = statusMap[ev.status] || ev.status || '';
+      const statusTag = statusText ? `<span class="tag ${ev.status === 'open' ? 'public' : ev.status === 'started' ? 'individual' : 'rule'}">${statusText}</span>` : '';
       const tags = [
         `<span class="tag ${mode}">${mode === 'team' ? '團體' : '個人'}</span>`,
-        `<span class="tag rule">${rounds}輪${m ? ' · '+m+'人' : ''}</span>`
+        `<span class="tag rule">${rounds}輪${m ? ' · '+m+'人' : ''}</span>`,
+        statusTag
       ];
       return `
         <a class="ev" href="/event.html?id=${ev.id}">
