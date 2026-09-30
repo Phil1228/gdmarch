@@ -224,7 +224,7 @@
 </div>
 
 <script>
-const EID = "__EVENT_ID__";
+const EID = new URLSearchParams(location.search).get('id') || "__EVENT_ID__";
 const api = (path, opt) => fetch(path, opt).then(r => r.json().catch(()=>({})));
 const $ = (id) => document.getElementById(id);
 
